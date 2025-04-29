@@ -18,7 +18,19 @@ CSV_FILE = "trades.csv"
 
 st.set_page_config(page_title="The Crypto Capital", layout="wide")
 
-# 🧠 Load bot trades
+# 🖌️ Custom CSS: Bigger font, normal, spaced, white tabs
+st.markdown("""
+    <style>
+    .stTabs [data-baseweb="tab"] {
+        font-size: 20px;
+        font-weight: normal;
+        margin-right: 20px;
+        color: #FFFFFF;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 🧠 Load Bot Trades
 @st.cache_data(ttl=15)
 def load_trades():
     if os.path.exists(CSV_FILE):
@@ -26,35 +38,28 @@ def load_trades():
     else:
         return pd.DataFrame()
 
-# 🧠 Load manual open futures positions
+# 🧠 Load Open Manual Futures Positions
 @st.cache_data(ttl=15)
 def load_open_positions():
     try:
-        response = session.get_positions(category="linear", settleCoin="USDT")
+        response = session.get_positions(category="linear", settleCoin="USDT", accountType="UNIFIED")
         futures_data = response["result"]["list"]
 
         open_positions = []
         for pos in futures_data:
-            position_value = float(pos.get("positionValue", 0))
-            avg_price = float(pos.get("avgPrice", 0))
-            mark_price = float(pos.get("markPrice", 0))
-            unrealised_pnl = float(pos.get("unrealisedPnL", 0))
-            leverage = pos.get("leverage", "N/A")
-            symbol = pos.get("symbol", "N/A")
-
-            if position_value != 0:
+            size = float(pos.get("size", 0))
+            if size != 0:
                 open_positions.append({
-                    "Symbol": symbol,
-                    "Avg Entry Price": avg_price,
-                    "Mark Price": mark_price,
-                    "Position Value ($)": position_value,
-                    "Unrealized PnL ($)": unrealised_pnl,
-                    "Leverage": leverage
+                    "Symbol": pos.get("symbol", ""),
+                    "Size": size,
+                    "Entry Price": float(pos.get("avgPrice", 0)),
+                    "Mark Price": float(pos.get("markPrice", 0)),
+                    "PnL ($)": float(pos.get("unrealisedPnl", 0)),
+                    "Leverage": pos.get("leverage", "N/A")
                 })
-
         return pd.DataFrame(open_positions)
     except Exception as e:
-        print(f"⚠️ Error loading futures positions: {e}")
+        print(f"⚠️ Error loading open futures positions: {e}")
         return pd.DataFrame()
 
 # 🧠 Build Growth Curve
@@ -68,44 +73,65 @@ def build_growth_curve(df_trades):
     fig = px.line(df_trades, x="timestamp", y="Cumulative PnL", title="Growth Curve (PnL Over Time)")
     return fig
 
+# 🧠 Split Bot Trades into Open and Closed
+def split_bot_trades(df_trades):
+    if df_trades.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    if 'take_profit' in df_trades.columns and 'stop_loss' in df_trades.columns:
+        df_open = df_trades[df_trades['take_profit'] == 0]
+        df_closed = df_trades[df_trades['take_profit'] != 0]
+        return df_open, df_closed
+    return df_trades, pd.DataFrame()
+
 # 🧠 Load Data
 df_trades = load_trades()
 df_open_positions = load_open_positions()
+df_bot_open, df_bot_closed = split_bot_trades(df_trades)
 
 # 🚀 Dashboard Title
-st.title("🚀 The Crypto Capital")
+st.title("🚀 The Crypto Capital Dashboard")
 
-# 📊 TABS
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Bot Trades", "🔥 Manual Open Trades", "📊 Growth Curve", "🛒 Place Trade"])
+# 📊 TABS (All Trades First)
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "🌐 All Trades", "📈 Bot Open Trades", "✅ Bot Closed Trades",
+    "🔥 Manual Open Trades", "✅ Manual Closed Trades",
+    "📊 Growth Curve", "🛒 Place Trade"
+])
 
-# 🟠 TAB 1: Bot Trades
+# 🟠 TAB 1: All Trades
 with tab1:
-    st.subheader("📈 Bot Trades Log (From trades.csv)")
-    if df_trades.empty:
-        st.warning("No bot trades found yet.")
+    st.subheader("🌐 All Trades Summary View")
+    if df_trades.empty and df_open_positions.empty:
+        st.warning("No trades yet.")
     else:
-        if 'entry_price' in df_trades.columns:
-            entry_col = 'entry_price'
-        elif 'entry' in df_trades.columns:
-            entry_col = 'entry'
-        else:
-            entry_col = None
+        if not df_bot_closed.empty:
+            st.subheader("✅ Completed Bot Trades")
+            st.dataframe(df_bot_closed)
+        if not df_open_positions.empty:
+            st.subheader("🔥 Live Manual Open Trades")
+            st.dataframe(df_open_positions)
 
-        if entry_col:
-            st.dataframe(df_trades.style.format({
-                entry_col: '{:.2f}',
-                'stop_loss': '{:.2f}',
-                'take_profit': '{:.2f}',
-                'qty': '{:.3f}'
-            }))
-        else:
-            st.dataframe(df_trades)
-
-# 🟠 TAB 2: Manual Open Trades
+# 🟠 TAB 2: Bot Open Trades
 with tab2:
-    st.subheader("🔥 Live Manual Open Futures Positions")
+    st.subheader("📈 Active Bot Trades")
+    if df_bot_open.empty:
+        st.info("No active bot trades.")
+    else:
+        st.dataframe(df_bot_open)
+
+# 🟠 TAB 3: Bot Closed Trades
+with tab3:
+    st.subheader("✅ Completed Bot Trades")
+    if df_bot_closed.empty:
+        st.info("No closed bot trades yet.")
+    else:
+        st.dataframe(df_bot_closed)
+
+# 🟠 TAB 4: Manual Open Trades
+with tab4:
+    st.subheader("🔥 Live Manual Open Trades")
     if df_open_positions.empty:
-        st.warning("No open manual futures positions found.")
+        st.warning("No live manual trades open.")
     else:
         def color_pnl(val):
             try:
@@ -120,26 +146,31 @@ with tab2:
                 return ''
         st.dataframe(
             df_open_positions.style.format({
-                'Avg Entry Price': '{:.6f}',
+                'Entry Price': '{:.6f}',
                 'Mark Price': '{:.6f}',
-                'Position Value ($)': '{:.2f}',
-                'Unrealized PnL ($)': '{:+.2f}',
+                'PnL ($)': '{:+.2f}',
+                'Size': '{:.3f}',
                 'Leverage': '{}'
-            }).applymap(color_pnl, subset=['Unrealized PnL ($)'])
+            }).applymap(color_pnl, subset=['PnL ($)'])
         )
 
-# 🟠 TAB 3: Growth Curve
-with tab3:
-    st.subheader("📊 Bot Trading Growth Curve (PnL Over Time)")
+# 🟠 TAB 5: Manual Closed Trades (Coming Soon)
+with tab5:
+    st.subheader("✅ Completed Manual Trades (Coming Soon)")
+    st.info("Manual closed trades tracking will be added later.")
+
+# 🟠 TAB 6: Growth Curve
+with tab6:
+    st.subheader("📊 Trading Growth Curve")
     if df_trades.empty:
-        st.warning("No bot trades yet to generate growth curve.")
+        st.warning("No bot trades yet to plot growth.")
     else:
         fig = build_growth_curve(df_trades)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-# 🟠 TAB 4: Place Trade Form
-with tab4:
+# 🟠 TAB 7: Place Trade
+with tab7:
     st.subheader("🛒 Place a Live Futures Trade")
 
     symbol_choice = st.selectbox(
@@ -176,4 +207,3 @@ with tab4:
             st.error(f"❌ Order failed: {e}")
 
 st.caption("🔄 Auto-refresh every 15 seconds...")
-
