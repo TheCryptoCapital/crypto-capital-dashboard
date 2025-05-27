@@ -1,0 +1,247 @@
+{
+  "session_info": {
+    "start_time": "2025-05-27T18:17:24.333081",
+    "end_time": "2025-05-27T18:17:40.372824",
+    "runtime_seconds": 16.039521,
+    "emergency_stop": false,
+    "bot_version": "3.0.0_multi_strategy"
+  },
+  "trading_performance": {
+    "total_trades": 0,
+    "profitable_trades": 0,
+    "consecutive_losses": 0,
+    "realized_pnl": 0,
+    "win_rate": 0.0
+  },
+  "account_info": {
+    "starting_balance": 5885.47864662,
+    "final_balance": 5885.47864662,
+    "max_drawdown": 0,
+    "daily_high_water_mark": 0
+  },
+  "strategy_performance": {
+    "rsi_oversold": {
+      "name": "RSI Quantum Pro",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 2.2,
+      "max_loss": 0.8,
+      "leverage": 12
+    },
+    "ema_cross": {
+      "name": "EMA Neural Elite",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 2.8,
+      "max_loss": 0.9,
+      "leverage": 10
+    },
+    "scalping": {
+      "name": "Lightning Scalp Quantum",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 0.9,
+      "max_loss": 0.4,
+      "leverage": 15
+    },
+    "macd_momentum": {
+      "name": "MACD Momentum Master",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 3.2,
+      "max_loss": 1.0,
+      "leverage": 8
+    },
+    "volume_spike": {
+      "name": "HFQ Volume Spike Elite",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 1.8,
+      "max_loss": 0.8,
+      "leverage": 12
+    },
+    "bollinger_bands": {
+      "name": "HFQ Bollinger Quantum Pro",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 2.3,
+      "max_loss": 0.9,
+      "leverage": 10
+    },
+    "regime_adaptive": {
+      "name": "Market Regime AI Director",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 0,
+      "position_value": 0,
+      "profit_target": 0,
+      "max_loss": 0,
+      "leverage": 1
+    },
+    "funding_arbitrage": {
+      "name": "Funding Rate Harvester Pro",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 0.4,
+      "max_loss": 0.15,
+      "leverage": 5
+    },
+    "news_sentiment": {
+      "name": "News Alpha AI Engine",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 1.8,
+      "max_loss": 0.7,
+      "leverage": 18
+    },
+    "mtf_confluence": {
+      "name": "Multi-Timeframe Confluence AI",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 2.8,
+      "max_loss": 1.0,
+      "leverage": 12
+    },
+    "cross_momentum": {
+      "name": "Cross-Asset Momentum AI",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 2.1,
+      "max_loss": 0.9,
+      "leverage": 10
+    },
+    "machine_learning": {
+      "name": "ML Ensemble Alpha Engine",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 2.5,
+      "max_loss": 0.8,
+      "leverage": 12
+    },
+    "orderbook_imbalance": {
+      "name": "Order Book Alpha Predator",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 0.6,
+      "max_loss": 0.25,
+      "leverage": 20
+    },
+    "cross_exchange_arb": {
+      "name": "Cross-Exchange Arbitrage Master",
+      "trades_today": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "win_rate": 0,
+      "max_positions": 1,
+      "position_value": 0,
+      "profit_target": 0.3,
+      "max_loss": 0.1,
+      "leverage": 3
+    }
+  },
+  "trailing_stops": {
+    "total_positions_tracked": 0,
+    "active_trailing_stops": 0,
+    "strategy_configs": {
+      "RSI_OVERSOLD": {
+        "initial_stop_pct": 0.4,
+        "trail_activation_pct": 0.8,
+        "trail_distance_pct": 0.2
+      },
+      "EMA_CROSSOVER": {
+        "initial_stop_pct": 0.5,
+        "trail_activation_pct": 1.0,
+        "trail_distance_pct": 0.25
+      },
+      "SCALPING": {
+        "initial_stop_pct": 0.3,
+        "trail_activation_pct": 0.5,
+        "trail_distance_pct": 0.12
+      },
+      "MACD_MOMENTUM": {
+        "initial_stop_pct": 0.6,
+        "trail_activation_pct": 1.2,
+        "trail_distance_pct": 0.3
+      },
+      "BREAKOUT": {
+        "initial_stop_pct": 0.7,
+        "trail_activation_pct": 1.5,
+        "trail_distance_pct": 0.4
+      },
+      "VOLUME_SPIKE": {
+        "initial_stop_pct": 0.4,
+        "trail_activation_pct": 0.7,
+        "trail_distance_pct": 0.18
+      },
+      "BOLLINGER_BANDS": {
+        "initial_stop_pct": 0.5,
+        "trail_activation_pct": 0.9,
+        "trail_distance_pct": 0.22
+      },
+      "HYBRID_COMPOSITE": {
+        "initial_stop_pct": 0.6,
+        "trail_activation_pct": 1.1,
+        "trail_distance_pct": 0.28
+      }
+    }
+  },
+  "configuration": {
+    "trading_mode": "moderate",
+    "signal_type": "multi_strategy",
+    "max_concurrent_trades": 15,
+    "daily_loss_cap": 0.1,
+    "total_strategies": 14,
+    "total_symbols": 2,
+    "testnet": false
+  }
+}
