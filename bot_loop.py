@@ -1608,13 +1608,13 @@ def create_enhanced_trailing_stop_manager(session, market_data, config, logger):
 trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
 
 # Start background tasks
-await trailing_manager.start_background_tasks()
+await self.trailing_manager.start_background_tasks()
 
 # In your main trading loop:
-await trailing_manager.manage_all_trailing_stops(positions)
+await self.trailing_manager.manage_all_trailing_stops(positions)
 
 # Get performance stats
-stats = trailing_manager.get_hf_performance_stats()
+stats = self.trailing_manager.get_hf_performance_stats()
 print(f"Success rate: {stats['success_rate']:.1f}%")
 """
 
@@ -7261,7 +7261,7 @@ class OrderManager:
                 return None
             
             # Use trailing stop manager to calculate initial profitable stop
-            trail_config = trailing_stop_manager.get_trailing_config(strategy_name)
+            trail_config = self.trailing_manager.get_trailing_config(strategy_name)
             stop_pct = trail_config.initial_stop_pct / 100
             
             if side == "Buy":
@@ -7371,12 +7371,12 @@ class OrderManager:
                     
                     if fill_success:
                         # Initialize trailing stop tracking
-                        trailing_stop_manager.initialize_position_tracking(
+                        self.trailing_manager.initialize_position_tracking(
                             symbol, current_price, side, strategy_name
                         )
                         
                         # Set initial profitable stop loss
-                        initial_stop = trailing_stop_manager.calculate_initial_stop_loss(
+                        initial_stop = self.trailing_manager.calculate_initial_stop_loss(
                             symbol, current_price, side, strategy_name
                         )
                         
@@ -7740,10 +7740,10 @@ class HFQAccountManager:
             precision = (qty_precision, qty_step)
             setattr(self, cache_key, precision)
             return precision
+
+        except Exception as e:
             logger.error(f"Precision fetch failed for {symbol}: {e}")
-            raise
- 
-# =====================================
+            return (2, 0.01)
 # ENHANCED TRADE LOGGING SYSTEM
 # =====================================
 
@@ -7912,7 +7912,7 @@ class EnhancedMultiStrategyTradingBot:
         self.account_manager = account_manager
         self.order_manager = order_manager
         self.trade_logger = trade_logger
-        self.trailing_stop_manager = TrailingStopManager()
+        self.trailing_manager = TrailingStopManager()
         
         # Initialize all strategies
         self.strategies = StrategyFactory.create_all_strategies()
@@ -8145,8 +8145,8 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
             
             # First, manage trailing stops for all positions
-            self.trailing_stop_manager.manage_all_trailing_stops(positions)
-            self.trailing_stop_manager.cleanup_closed_positions(positions)
+            self.self.trailing_manager.manage_all_trailing_stops(positions)
+            self.self.trailing_manager.cleanup_closed_positions(positions)
             
             # Group positions by strategy for better reporting
             positions_by_strategy = defaultdict(list)
@@ -8198,7 +8198,7 @@ class EnhancedMultiStrategyTradingBot:
                             logger.info(f"📈 [{strategy_name}] PROFIT TARGET HIT for {symbol}: ${unrealized_pnl:.2f}")
                             
                             # Check if trailing is active
-                            tracking = self.trailing_stop_manager.position_tracking.get(symbol, {})
+                            tracking = self.self.trailing_manager.position_tracking.get(symbol, {})
                             is_trailing = tracking.get('trailing_active', False)
                             
                             if not is_trailing:
@@ -8307,7 +8307,7 @@ class EnhancedMultiStrategyTradingBot:
                         risk_level = "🚨" if pos["pnl"] <= -config.max_loss_per_trade * 0.8 else ""
                         
                         # Check trailing status
-                        tracking = self.trailing_stop_manager.position_tracking.get(pos['symbol'], {})
+                        tracking = self.self.trailing_manager.position_tracking.get(pos['symbol'], {})
                         trailing_status = "🎯" if tracking.get('trailing_active', False) else "💰"
                         
                         logger.info(f"      {pnl_indicator}{risk_level}{trailing_status} {pos['symbol']}: {pos['side']} {pos['qty']} | "
@@ -8315,7 +8315,7 @@ class EnhancedMultiStrategyTradingBot:
                                   f"P&L: ${pos['pnl']:+.2f} ({pos['pnl_pct']:+.2f}%)")
             
             # Trailing Stop Summary
-            active_trailing = sum(1 for t in self.trailing_stop_manager.position_tracking.values() 
+            active_trailing = sum(1 for t in self.self.trailing_manager.position_tracking.values() 
                                 if t.get('trailing_active', False))
             logger.info(f"\n🎯 TRAILING STOPS: {active_trailing}/{len(positions)} positions active")
             
@@ -8521,8 +8521,8 @@ class EnhancedMultiStrategyTradingBot:
                 },
                 'strategy_performance': strategy_performance,
                 'trailing_stops': {
-                    'total_positions_tracked': len(self.trailing_stop_manager.position_tracking),
-                    'active_trailing_stops': sum(1 for t in self.trailing_stop_manager.position_tracking.values() 
+                    'total_positions_tracked': len(self.self.trailing_manager.position_tracking),
+                    'active_trailing_stops': sum(1 for t in self.self.trailing_manager.position_tracking.values() 
                                                 if t.get('trailing_active', False)),
                     'strategy_configs': {k: {
                         'initial_stop_pct': v.initial_stop_pct,
