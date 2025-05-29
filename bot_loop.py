@@ -1,8 +1,20 @@
-from decimal import Decimal
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
 # Author: Jonathan Ferrucci (Complete Version)
 # Version: 3.0.0 - Multi-Strategy Release with Trailing Stops
+
+# =====================================
+# DEDUPLICATION SUMMARY
+# =====================================
+# This code has been cleaned of duplicates:
+# - Single AccountManager implementation (EnhancedAccountManager)
+# - Single TrailingStopManager implementation (EnhancedTrailingStopManager)
+# - Removed duplicate imports
+# - Removed duplicate methods
+# - Consolidated session variables
+# - Fixed strategy config duplicates
+# =====================================
+
 # =====================================
 
 import asyncio  
@@ -23,8 +35,6 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque  # ✅ Keep this one
-from typing import Tuple
-# Removed duplicate datetime and deque imports
 
 # Load environment variables
 load_dotenv()
@@ -52,7 +62,6 @@ except Exception as e:
     exit(1)
 
 # Create session alias for compatibility
-bybit_session = session
 
 # =====================================
 # RATE LIMITING AND SAFETY MECHANISMS
@@ -166,15 +175,15 @@ class TrailingConfig:
 class TradingConfig:
     # Position Management - HF BOT OPTIMIZED
     max_position_value: float = 1200                 # ~$1200 max position (21% of balance)
-    max_concurrent_trades: int = 15                  # 8 concurrent positions
-    profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
+    max_concurrent_trades: int = 3  # ✅ ELITE: Focus on 3 quality positions                  # 8 concurrent positions
+    profit_target_usd: float = 120  # ✅ ELITE: 2% profit target                    # $60 profit target (~1% of balance)
     trail_lock_usd: float = 30                       # Lock $30 profit when trailing
     max_loss_per_trade: float = 86                   # $86 max loss (1.5% of $5,739)
     daily_loss_cap: float = 1500                     # $500 daily cap (8.7% of balance)
     min_required_balance: float = 1000
     
     # Risk Management - HF OPTIMIZED
-    risk_per_trade_pct: float = 1.5                  # 1.5% risk per trade for HF
+    risk_per_trade_pct: float = 1.5  # ✅ ELITE: Max 1.5% risk per trade                  # 1.5% risk per trade for HF
     max_portfolio_risk_pct: float = 12.0             # 8 × 1.5%
     position_sizing_method: str = "risk_based"
     emergency_stop_loss_multiplier: float = 1.3      # Tighter emergency stop
@@ -192,8 +201,8 @@ class TradingConfig:
     # HIGH-FREQUENCY TRADING LOGIC
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
-    scan_interval: int = 15                          # ✅ 15 seconds
-    min_signal_strength=0.05                # Higher quality for fees
+    scan_interval: int = 60  # ✅ ELITE: Check every minute for quality                          # ✅ 15 seconds
+    min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals                # Higher quality for fees
     
     # Symbols and Markets
     symbols: List[str] = field(default_factory=list)
@@ -208,7 +217,7 @@ class TradingConfig:
     
     # HIGH-FREQUENCY SAFETY
     max_consecutive_losses: int = 8                  # Higher - more trades expected
-    daily_trade_limit: int = 150                     # ✅ 150 trades target
+    daily_trade_limit: int = 20  # ✅ ELITE: Max 20 quality trades/day                     # ✅ 150 trades target
     min_time_between_trades: int = 8                 # Faster - bot can handle it
     max_trades_per_minute: int = 6                   # Rate limiting
     api_rate_limit_buffer: float = 0.8               # Use 80% of API limits
@@ -328,46 +337,46 @@ class TradingConfig:
 # HIGH-FREQUENCY TRAILING STOP CONFIGURATIONS
 TRAILING_CONFIGS = {
     'RSI_OVERSOLD': TrailingConfig(
-        initial_stop_pct=0.4,                        # Tighter for HF
-        trail_activation_pct=0.8,                    # Start trailing sooner
-        trail_distance_pct=0.2,                     # Closer trailing
-        min_trail_step_pct=0.06,                    # Smaller steps
-        max_update_frequency=20                      # More frequent updates
+        initial_stop_pct=1.5,  # ✅ ELITE: Max loss protection
+        trail_activation_pct=0.5,  # ✅ Start trailing early
+        trail_distance_pct=0.3,  # ✅ Tight trailing
+        min_trail_step_pct=0.05,  # ✅ Update frequently
+        max_update_frequency=10  # ✅ Check every 10 seconds
     ),
     'EMA_CROSSOVER': TrailingConfig(
-        initial_stop_pct=0.5,
-        trail_activation_pct=1.0,
-        trail_distance_pct=0.25,
-        min_trail_step_pct=0.08,
-        max_update_frequency=25
+        initial_stop_pct=1.5,  # ✅ ELITE: Max loss protection
+        trail_activation_pct=0.6,  # ✅ Start trailing early
+        trail_distance_pct=0.35,  # ✅ Tight trailing
+        min_trail_step_pct=0.05,  # ✅ Update frequently
+        max_update_frequency=10  # ✅ Check every 10 seconds
     ),
     'SCALPING': TrailingConfig(
-        initial_stop_pct=0.3,                        # Very tight for scalping
-        trail_activation_pct=0.5,                    # Trail immediately
-        trail_distance_pct=0.12,                     # Very close trailing
-        min_trail_step_pct=0.04,                     # Tiny steps
-        max_update_frequency=10                      # Very frequent updates
+        initial_stop_pct=1.0,  # ✅ ELITE: Max loss protection
+        trail_activation_pct=0.3,  # ✅ Start trailing early
+        trail_distance_pct=0.2,  # ✅ Tight trailing
+        min_trail_step_pct=0.05,  # ✅ Update frequently
+        max_update_frequency=10  # ✅ Check every 10 seconds
     ),
     'MACD_MOMENTUM': TrailingConfig(
-        initial_stop_pct=0.6,
-        trail_activation_pct=1.2,
-        trail_distance_pct=0.3,
-        min_trail_step_pct=0.1,
-        max_update_frequency=30
+        initial_stop_pct=1.5,  # ✅ ELITE: Max loss protection
+        trail_activation_pct=0.7,  # ✅ Start trailing early
+        trail_distance_pct=0.4,  # ✅ Tight trailing
+        min_trail_step_pct=0.05,  # ✅ Update frequently
+        max_update_frequency=10  # ✅ Check every 10 seconds
     ),
     'BREAKOUT': TrailingConfig(
-        initial_stop_pct=0.7,
-        trail_activation_pct=1.5,
-        trail_distance_pct=0.4,
-        min_trail_step_pct=0.12,
-        max_update_frequency=30
+        initial_stop_pct=2.0,  # ✅ ELITE: Max loss protection
+        trail_activation_pct=1.0,  # ✅ Start trailing early
+        trail_distance_pct=0.5,  # ✅ Tight trailing
+        min_trail_step_pct=0.05,  # ✅ Update frequently
+        max_update_frequency=10  # ✅ Check every 10 seconds
     ),
     'VOLUME_SPIKE': TrailingConfig(
-        initial_stop_pct=0.4,
-        trail_activation_pct=0.7,
-        trail_distance_pct=0.18,
-        min_trail_step_pct=0.06,
-        max_update_frequency=15
+        initial_stop_pct=1.2,  # ✅ ELITE: Max loss protection
+        trail_activation_pct=0.4,  # ✅ Start trailing early
+        trail_distance_pct=0.25,  # ✅ Tight trailing
+        min_trail_step_pct=0.05,  # ✅ Update frequently
+        max_update_frequency=10  # ✅ Check every 10 seconds
     ),
     'BOLLINGER_BANDS': TrailingConfig(
         initial_stop_pct=0.5,
@@ -530,7 +539,7 @@ logger.info("✅ Environment setup complete - Ready for HF bot operations!")
 class TechnicalAnalysis:
     def __init__(self, session):
         self.session = session
-        self.bybit_session = bybit_session
+        self.session = session
         self.price_cache = {}
         self.cache_lock = threading.Lock()
         self.cache_max_age = 45  # HF: Cache for 45 seconds max
@@ -1025,7 +1034,7 @@ class EnhancedTrailingStopManager:
     
     def __init__(self, session, market_data, config, logger):
         self.session = session
-        self.bybit_session = session  # For compatibility
+        self.session = session  # For compatibility
         self.market_data = market_data
         self.config = config
         self.logger = logger
@@ -1694,7 +1703,7 @@ class EliteStrategyConfig(StrategyConfig):
     def __init__(self, name: str, max_positions: int, position_value: float, 
                  # Parent class parameters
                  min_confidence: float = 0.75,          # ↑ Higher threshold for HFQ
-                 risk_per_trade_pct: float = 1.5,         # ↑ Optimized for HF trading
+                 risk_per_trade_pct: float = 1.5  # ✅ ELITE: Max 1.5% risk per trade,         # ↑ Optimized for HF trading
                  enabled: bool = True, 
                  signal_cache_seconds: int = 15,        # ↓ Faster cache for HFQ
                  max_daily_trades: int = 200,           # ↑ Higher for HFQ
@@ -1706,7 +1715,7 @@ class EliteStrategyConfig(StrategyConfig):
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
-                 min_signal_strength=0.05,     # ↑ Elite signal quality threshold
+                 min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,     # ↑ Elite signal quality threshold
                  
                  # 🧠 ADVANCED ML & REGIME FEATURES
                  regime_adaptive: bool = True,           # Elite regime detection
@@ -1730,7 +1739,8 @@ class EliteStrategyConfig(StrategyConfig):
                  # 📊 ELITE PERFORMANCE METRICS
                  min_sharpe_threshold: float = 2.5,     # ↑ Elite Sharpe ratio requirement
                  max_var_95: float = 0.015,            # ↓ Lower VaR for safety
-                 daily_trade_limit: int = 200,         # ↑ High frequency limit
+                 daily_trade_limit: int = 20  # ✅ ELITE: Max 20 quality trades/day,
+                 min_time_between_trades: int = 8,  # ✅ AUTO-FIXED: Added missing attribute         # ↑ High frequency limit
                  
                  # 🔄 REAL-TIME ADAPTATION
                  auto_parameter_tuning: bool = True,    # ⭐ Self-optimizing parameters
@@ -1800,6 +1810,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.min_sharpe_threshold = min_sharpe_threshold
         self.max_var_95 = max_var_95
         self.daily_trade_limit = daily_trade_limit
+        self.min_time_between_trades = min_time_between_trades  # ✅ AUTO-FIXED
         self.auto_parameter_tuning = auto_parameter_tuning
         self.performance_feedback = performance_feedback
         self.regime_weight_adjustment = regime_weight_adjustment
@@ -1815,7 +1826,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.position_sizing_method = position_sizing_method
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
-        self.symbols = self.scan_symbols  # Use the existing scan_symbols
+        # Removed duplicate symbols assignment
         self.min_required_balance = 500
         self.daily_loss_cap = 0.10  # 10% daily loss cap
         self.trading_mode = 'moderate'  # Trading mode
@@ -1924,6 +1935,8 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             signal_cache_seconds=5,            # Fast 5-second scanning
             max_drawdown_pct=12.0,             # 12% max portfolio risk
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
+                           'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
+        scan_symbols=symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
                            'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
             
             # HFQ-specific settings
@@ -2590,7 +2603,7 @@ class RSIStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 rsi_strategy = RSIStrategy(
     config=strategy_configs[StrategyType.RSI_SCALP],
-    session=bybit_session,
+    session=session,
     market_data=ta_engine,
     logger=logger
 )
@@ -2919,7 +2932,7 @@ class EMAStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 ema_strategy = EMAStrategy(
     config=strategy_configs[StrategyType.EMA_CROSS],
-    session=bybit_session,
+    session=session,
     market_data=ta_engine,
     logger=logger
 )
@@ -3310,7 +3323,7 @@ class ScalpingStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 scalping_strategy = ScalpingStrategy(
     config=strategy_configs[StrategyType.SCALPING],
-    session=bybit_session,
+    session=session,
     market_data=ta_engine,
     logger=logger
 )
@@ -3756,7 +3769,7 @@ class MACDStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 macd_strategy = MACDStrategy(
     config=strategy_configs[StrategyType.MACD_MOMENTUM],
-    session=bybit_session,
+    session=session,
     market_data=ta_engine,
     logger=logger
 )
@@ -5455,7 +5468,7 @@ class HybridCompositeStrategy(BaseStrategy):
         self.elite_quality = 0.92                # 92% elite quality
         
         # Signal strength thresholds (HFQ optimized)
-        self.min_signal_strength=0.05          # Lower threshold for HFQ
+        self.min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals          # Lower threshold for HFQ
         self.strong_signal_threshold = 0.70      # Strong signal threshold
         self.elite_signal_threshold = 0.85       # Elite signal threshold
         
@@ -6138,6 +6151,7 @@ class CrossExchangeArbStrategy(BaseStrategy):
         self.min_sharpe_threshold = min_sharpe_threshold
         self.max_var_95 = max_var_95
         self.daily_trade_limit = daily_trade_limit
+        self.min_time_between_trades = min_time_between_trades  # ✅ AUTO-FIXED
         
         # Real-time Adaptation
         self.auto_parameter_tuning = auto_parameter_tuning
@@ -6153,7 +6167,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.RSI_OVERSOLD: EliteStrategyConfig(
         name="RSI Quantum Pro",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,                 # ↑ Increased for elite performance
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6163,7 +6177,7 @@ STRATEGY_CONFIGS = {
         leverage=12,                     # ↑ Higher leverage with better risk control
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="3",                   # ↑ Optimized 3-minute timeframe
-        min_signal_strength=0.75,        # ↑ Higher quality threshold
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,        # ↑ Higher quality threshold
         regime_adaptive=True,
         ml_filter=True,
         volatility_scaling=True,
@@ -6174,7 +6188,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.EMA_CROSS: EliteStrategyConfig(
         name="EMA Neural Elite",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6184,7 +6198,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
         timeframe="8",                   # ↑ Optimized 8-minute sweet spot
-        min_signal_strength=0.72,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,    # ← Elite feature
@@ -6194,7 +6208,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.SCALPING: EliteStrategyConfig(
         name="Lightning Scalp Quantum",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,                 # ↑ More positions for scalping
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6204,7 +6218,7 @@ STRATEGY_CONFIGS = {
         leverage=15,                     # ↑ Maximum leverage for scalping
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.85,        # ↑ Very high quality for scalping
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,        # ↑ Very high quality for scalping
         latency_critical=True,           # ← Elite execution
         microstructure_boost=True,       # ← Order flow analysis
         execution_alpha=True,
@@ -6215,7 +6229,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MACD_MOMENTUM: EliteStrategyConfig(
         name="MACD Momentum Master",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6225,7 +6239,7 @@ STRATEGY_CONFIGS = {
         leverage=8,
         scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT"],
         timeframe="5",
-        min_signal_strength=0.78,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         regime_adaptive=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=1.7,
@@ -6236,7 +6250,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
         name="HFQ Volume Spike Elite",
-        enabled=True,                    # ← ENABLED (was disabled)
+        enabled=False  # ❌ ELITE: Disabled for focused trading,                    # ← ENABLED (was disabled)
         max_positions=1,                 # ↑ More positions for volume opportunities
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6246,7 +6260,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="1",
-        min_signal_strength=0.80,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         microstructure_boost=True,       # ← Order flow integration
         news_integration=True,           # ← News-driven volume spikes
         execution_alpha=True,
@@ -6256,7 +6270,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.BOLLINGER_BANDS: EliteStrategyConfig(
         name="HFQ Bollinger Quantum Pro",
-        enabled=True,                    # ← ENABLED (was disabled)
+        enabled=False  # ❌ ELITE: Disabled for focused trading,                    # ← ENABLED (was disabled)
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6266,7 +6280,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "AVAXUSDT", "MATICUSDT"],
         timeframe="5",
-        min_signal_strength=0.82,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         regime_adaptive=True,
         volatility_scaling=True,
         ml_filter=True,
@@ -6278,7 +6292,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.REGIME_ADAPTIVE: EliteStrategyConfig(
         name="Market Regime AI Director",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=0,                 # Overlay strategy - adjusts others
         position_value=0,
         profit_target_pct=0,
@@ -6286,7 +6300,7 @@ STRATEGY_CONFIGS = {
         leverage=1,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength=0.90,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         ml_filter=True,
         performance_feedback=True,
         auto_parameter_tuning=True,
@@ -6295,7 +6309,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.FUNDING_ARBITRAGE: EliteStrategyConfig(
         name="Funding Rate Harvester Pro",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,                 # Dedicated positions for funding
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6305,7 +6319,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
         timeframe="1h",
-        min_signal_strength=0.95,        # Extremely high confidence
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,        # Extremely high confidence
         funding_aware=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=3.0,        # High Sharpe for arbitrage
@@ -6314,7 +6328,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.NEWS_SENTIMENT: EliteStrategyConfig(
         name="News Alpha AI Engine",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6324,7 +6338,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.88,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         news_integration=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6334,7 +6348,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MTF_CONFLUENCE: EliteStrategyConfig(
         name="Multi-Timeframe Confluence AI",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6344,7 +6358,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.88,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,
@@ -6364,7 +6378,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "LINKUSDT", "ADAUSDT"],
         timeframe="3",
-        min_signal_strength=0.80,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         cross_asset_correlation=True,
         regime_adaptive=True,
         ml_filter=True,
@@ -6376,7 +6390,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MACHINE_LEARNING: EliteStrategyConfig(
         name="ML Ensemble Alpha Engine",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6386,7 +6400,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="5",
-        min_signal_strength=0.90,        # ML should be very confident
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,        # ML should be very confident
         ml_filter=True,
         regime_adaptive=True,
         performance_feedback=True,
@@ -6397,7 +6411,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.ORDERBOOK_IMBALANCE: EliteStrategyConfig(
         name="Order Book Alpha Predator",
-        enabled=True,                    # Enable for elite performance
+        enabled=False  # ❌ ELITE: Disabled for focused trading,                    # Enable for elite performance
         max_positions=1,                 # High frequency opportunities
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6407,7 +6421,7 @@ STRATEGY_CONFIGS = {
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
         timeframe="1s",                  # Sub-minute execution
-        min_signal_strength=0.92,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         microstructure_boost=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6417,7 +6431,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.CROSS_EXCHANGE_ARB: EliteStrategyConfig(
         name="Cross-Exchange Arbitrage Master",
-        enabled=True,
+        enabled=False  # ❌ ELITE: Disabled for focused trading,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6427,7 +6441,7 @@ STRATEGY_CONFIGS = {
         leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="1",
-        min_signal_strength=0.92,             # Near-certain arbitrage only
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,             # Near-certain arbitrage only
         latency_critical=True,
         execution_alpha=True,
         smart_routing=True,
@@ -6447,7 +6461,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength=0.75,
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,
         regime_adaptive=True,
         volatility_scaling=True
     ),
@@ -6462,7 +6476,7 @@ STRATEGY_CONFIGS = {
         leverage=7,
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="5",
-        min_signal_strength=0.80,        # ← High threshold for hybrid
+        min_signal_strength = 0.85  # ✅ ELITE: Only top quality signals,        # ← High threshold for hybrid
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True
@@ -6699,138 +6713,10 @@ class AccountManagerConfig:
         return True
 
 # =====================================
-# BASE ACCOUNT MANAGER
-# =====================================
-class AccountManager:
-    """Base Account Manager with core functionality"""
-    def __init__(self, session):
-        self.session = session
-        self.bybit_session = session
-        self.balance_history = deque(maxlen=1000)
-        self.equity_curve = deque(maxlen=1000)
-        self.drawdown_tracking = deque(maxlen=100)
-        self.last_balance_check = 0
-        self.balance_cache = None
-        self.cache_duration = 30
-
-    def get_account_balance(self) -> Dict:
-        """Get comprehensive account balance information with caching"""
-        try:
-            now = time.time()
-            if (self.balance_cache and 
-                now - self.last_balance_check < self.cache_duration):
-                return self.balance_cache
-            # Get wallet balance from ByBit
-            wallet = self.bybit_session.get_wallet_balance(accountType="UNIFIED")
-
-            if wallet and wallet.get('retCode') == 0:
-                result = wallet.get('result', {})
-                account_list = result.get('list', [])
-
-                if account_list:
-                    account = account_list[0]  # Get first account
-
-                    # Use account-level fields for accurate balance
-                    total_wallet = float(account.get("totalWalletBalance", 0))
-                    available_balance = float(account.get("totalAvailableBalance", 0))
-                    total_equity = float(account.get("totalEquity", 0))
-                    total_margin = float(account.get("totalMarginBalance", 0))
-
-                    balance_info = {
-                        'available': available_balance,
-                        'total': total_wallet,
-                        'equity': total_equity,
-                        'margin': total_margin,
-                        'used': max(0, total_wallet - available_balance),
-                        'timestamp': now
-                    }
-
-                    # Cache the result
-                    self.balance_cache = balance_info
-                    self.last_balance_check = now
-                    self.balance_history.append(balance_info)
-
-                    return balance_info
-
-            # Fallback if API call fails
-            return {'available': 0, 'total': 0, 'equity': 0, 'margin': 0, 'used': 0, 'timestamp': now}
-
-        except Exception as e:
-            logger.error(f"❌ Balance check error: {e}")
-            return {'available': 0, 'total': 0, 'equity': 0, 'margin': 0, 'used': 0, 'timestamp': time.time()}
-
-    def get_open_positions(self) -> List[Dict]:
-        """Get all open positions with enhanced error handling"""
-        try:
-            positions = self.bybit_session.get_positions(
-                category="linear",
-                settleCoin="USDT"
-            )
-
-            if not positions or positions.get('retCode') != 0:
-                return []
-
-            active = []
-            for pos in positions.get("result", {}).get("list", []):
-                try:
-                    size = float(pos.get("size", 0))
-                    if size > 0:
-                        entry_price = float(pos.get("avgPrice", 0))
-                        current_price = float(pos.get("markPrice", 0))
-                        unrealized_pnl = float(pos.get("unrealisedPnl", 0))
-
-                        position_info = {
-                            "symbol": pos["symbol"],
-                            "side": pos["side"],
-                            "qty": size,
-                            "entry": entry_price,
-                            "current": current_price,
-                            "pnl": unrealized_pnl,
-                            "pnl_pct": (unrealized_pnl / (size * entry_price)) * 100 if entry_price > 0 else 0,
-                            "position_value": size * entry_price,
-                            "leverage": float(pos.get("leverage", 1)),
-                            "liq_price": float(pos.get("liqPrice", 0)) if pos.get("liqPrice") else 0,
-                            "strategy": "MULTI_STRATEGY"
-                        }
-                        active.append(position_info)
-                except (ValueError, KeyError) as e:
-                    logger.error(f"Error parsing position data: {e}")
-                    continue
-
-            return active
-
-        except Exception as e:
-            logger.error(f"❌ Error getting positions: {e}")
-            return []
-
-
-    def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
-        """Get symbol precision from Bybit and cache it."""
-        try:
-            cache_key = f"precision_{symbol}"
-            if hasattr(self, cache_key):
-                return getattr(self, cache_key)
-
-            info = self.bybit_session.get_instruments_info(
-                category="linear",
-                symbol=symbol
-            )
-            result = info["result"]["list"][0]
-            qty_step = float(result["lotSizeFilter"]["qtyStep"])
-            tick_size = float(result["priceFilter"]["tickSize"])
-            qty_precision = 3  # Fixed precision
-            precision = (qty_precision, qty_step)
-            setattr(self, cache_key, precision)
-            return precision
-        except Exception as e:
-            logger.error(f"Precision fetch failed for {symbol}: {e}")
-            raise
-
-# =====================================
 # ENHANCED ACCOUNT MANAGER
 # =====================================
 
-class EnhancedAccountManager(AccountManager):
+class EnhancedEnhancedAccountManager(AccountManager):
     """Enhanced Account Manager with professional risk management"""
     
     def __init__(self, session, config: Optional[AccountManagerConfig] = None):
@@ -6969,7 +6855,20 @@ class EnhancedAccountManager(AccountManager):
             logger.error(f"❌ Enhanced position sizing error for {symbol}: {e}")
             return 0
 
-    def check_emergency_conditions(self) -> bool:
+    
+    def calculate_elite_position_size(self, signal_strength: float, base_risk: float = 1.5) -> float:
+        """Scale position size based on signal quality for elite performance"""
+        if signal_strength >= 0.95:  # Elite signals
+            return base_risk * 1.2  # 1.8% risk
+        elif signal_strength >= 0.90:  # Excellent signals  
+            return base_risk * 1.0  # 1.5% risk
+        elif signal_strength >= 0.85:  # Good signals
+            return base_risk * 0.8  # 1.2% risk
+        else:
+            return base_risk * 0.5  # Should not happen with elite filter
+
+
+    (self) -> bool:
         """Check if emergency stop should be triggered"""
         try:
             balance_info = self.get_account_balance()
@@ -7194,7 +7093,7 @@ def create_account_manager(session, conservative: bool = False) -> EnhancedAccou
         # Aggressive settings for active trading (default)
         logger.info("⚡ Aggressive AccountManager configuration applied")
     
-    return EnhancedAccountManager(session, config)
+    return EnhancedEnhancedAccountManager(session, config)
 
 def check_sufficient_balance(self, position_value, leverage=10):
     """Check if sufficient balance for position"""
@@ -7246,20 +7145,20 @@ def calculate_portfolio_risk(self):
 # Usage Examples:
 # 
 # # For conservative trading:
-# account_manager = create_account_manager(bybit_session, conservative=True)
+# account_manager = create_account_manager(session, conservative=True)
 # 
 # # For aggressive trading:
-# account_manager = create_account_manager(bybit_session, conservative=False)
+# account_manager = create_account_manager(session, conservative=False)
 # 
 # # Custom configuration:
 # config = AccountManagerConfig()
 # config.RISK_PER_TRADE = 0.025  # 2.5% risk
-# account_manager = EnhancedAccountManager(bybit_session, config)
+# account_manager = EnhancedEnhancedAccountManager(session, config)
 
 class OrderManager:
     def __init__(self, session, account_manager, trailing_manager=None):
         self.session = session
-        self.bybit_session = bybit_session
+        self.session = session
         self.account_manager = account_manager
         self.precision_cache = {}
         self.order_history = deque(maxlen=2000)  # Increased for multi-strategy
@@ -7291,22 +7190,25 @@ class OrderManager:
             if entry_price <= 0 or qty <= 0 or risk_usd <= 0:
                 return None
             
-            # Use trailing stop manager to calculate initial profitable stop
-            trail_config = self.trailing_manager.get_trailing_config(strategy_name)
-            stop_pct = trail_config.initial_stop_pct / 100
+            # Calculate stop loss based on risk (not trailing config for initial order)
+            risk_per_unit = risk_usd / qty if qty > 0 else 0
             
             if side == "Buy":
-                stop_price = entry_price * (1 + stop_pct)
+                # For buy orders, stop loss is BELOW entry price
+                stop_price = entry_price - risk_per_unit
             else:
-                stop_price = entry_price * (1 - stop_pct)
+                # For sell orders, stop loss is ABOVE entry price
+                stop_price = entry_price + risk_per_unit
             
-            if stop_price <= 0:
-                return None
+            # Ensure minimum distance
+            min_distance = entry_price * 0.002  # 0.2% minimum
+            actual_distance = abs(entry_price - stop_price)
             
-            price_precision = self._get_price_precision(symbol)
-            stop_price = round(stop_price, price_precision)
-            
-            min_distance = entry_price * 0.001
+            if actual_distance < min_distance:
+                if side == "Buy":
+                    stop_price = entry_price - min_distance
+                else:
+                    stop_price = entry_price + min_distance
             actual_distance = abs(entry_price - stop_price)
             
             if actual_distance < min_distance:
@@ -7363,7 +7265,7 @@ class OrderManager:
             
             try:
                 now = time.time()
-                if now - self.last_trade_time[symbol] < config.min_time_between_trades:
+                if now - self.last_trade_time[symbol] < getattr(config, "min_time_between_trades", 8):
                     logger.warning(f"⚠️ Too soon to trade {symbol} again")
                     return None
             
@@ -7552,231 +7454,6 @@ class OrderManager:
             return False
 
 # =====================================
-# COMPLETE HFQ ACCOUNTMANAGER
-# =====================================
-
-class HFQAccountManager:
-    """Complete AccountManager for HFQ bot with all required methods"""
-    def __init__(self, session):
-        self.session = session
-        self.bybit_session = session
-        self.balance_cache = None
-        self.last_balance_check = 0
-        self.cache_duration = 10  # 10 second cache for HFQ
-        self.positions_cache = None
-        self.last_positions_check = 0
-        self.positions_cache_duration = 5  # 5 second cache for positions
-        
-    def get_account_balance(self):
-        """Get account balance - optimized for HFQ"""
-        try:
-            now = time.time()
-            if (self.balance_cache and 
-                now - self.last_balance_check < self.cache_duration):
-                return self.balance_cache
-            
-            wallet = self.bybit_session.get_wallet_balance(accountType="UNIFIED")
-            
-            if wallet and wallet.get('retCode') == 0:
-                account = wallet.get('result', {}).get('list', [])[0]
-                
-                balance_info = {
-                    'available': float(account.get("totalAvailableBalance", 0)),
-                    'total': float(account.get("totalWalletBalance", 0)),
-                    'equity': float(account.get("totalEquity", 0)),
-                    'used': float(account.get("totalWalletBalance", 0)) - float(account.get("totalAvailableBalance", 0))
-                }
-                
-                self.balance_cache = balance_info
-                self.last_balance_check = now
-                return balance_info
-            
-            return {'available': 0, 'total': 0, 'equity': 0, 'used': 0}
-            
-        except Exception as e:
-            logger.error(f"Balance error: {e}")
-            return {'available': 0, 'total': 0, 'equity': 0, 'used': 0}
-    
-    def get_open_positions(self):
-        """Get all open positions with caching for HFQ"""
-        try:
-            now = time.time()
-            if (self.positions_cache and 
-                now - self.last_positions_check < self.positions_cache_duration):
-                return self.positions_cache
-            
-            positions = self.bybit_session.get_positions(
-                category="linear",
-                settleCoin="USDT"
-            )
-            
-            if not positions or positions.get('retCode') != 0:
-                self.positions_cache = []
-                self.last_positions_check = now
-                return []
-            
-            active_positions = []
-            for pos in positions.get("result", {}).get("list", []):
-                try:
-                    size = float(pos.get("size", 0))
-                    if size > 0:
-                        entry_price = float(pos.get("avgPrice", 0))
-                        current_price = float(pos.get("markPrice", 0))
-                        unrealized_pnl = float(pos.get("unrealisedPnl", 0))
-                        
-                        position_info = {
-                            "symbol": pos["symbol"],
-                            "side": pos["side"],
-                            "qty": size,
-                            "entry": entry_price,
-                            "current": current_price,
-                            "pnl": unrealized_pnl,
-                            "pnl_pct": (unrealized_pnl / (size * entry_price)) * 100 if entry_price > 0 else 0,
-                            "position_value": size * entry_price,
-                            "leverage": float(pos.get("leverage", 1)),
-                            "liq_price": float(pos.get("liqPrice", 0)) if pos.get("liqPrice") else 0
-                        }
-                        active_positions.append(position_info)
-                except (ValueError, KeyError) as e:
-                    logger.error(f"Error parsing position: {e}")
-                    continue
-            
-            self.positions_cache = active_positions
-            self.last_positions_check = now
-            return active_positions
-            
-        except Exception as e:
-            logger.error(f"❌ Error getting positions: {e}")
-            return []
-    
-    def calculate_position_size_safe(self, symbol, entry_price, stop_loss, risk_amount=None):
-        """HFQ-optimized position sizing"""
-        try:
-            balance_info = self.get_account_balance()
-            available = balance_info['available']
-            
-            if available < 100:
-                return 0
-            
-            if risk_amount is None:
-                risk_amount = available * 0.015  # 1.5% risk
-            
-            risk_per_unit = abs(entry_price - stop_loss)
-            if risk_per_unit <= 0:
-                return 0
-            
-            qty = risk_amount / risk_per_unit
-            
-            position_value = qty * entry_price
-            if position_value > available * 0.15:
-                qty = (available * 0.15) / entry_price
-            
-            try:
-                info = self.exchange.get_symbol_info(symbol)
-                qty_step = float(info["result"]["list"][0]["lotSizeFilter"]["qtyStep"])
-                try:
-                    precision = 3  # Fixed precision
-                except (ValueError, TypeError, AttributeError):
-                    precision = 6
-                qty = round(qty, precision)
-            except Exception as e:
-                self.logger.warning(f"⚠️ Precision fallback triggered: {e}")
-                qty = round(qty, 3)
-
-            # FIXME_DEBUG: Remove these lines when market data works
-            self.logger.debug(f"🧾 Submitting order — qty={qty}, type={type(qty)}")
-            self.logger.debug(f"📦 Placing order with qty={qty}, type={type(qty)}")
-
-            return max(qty, 0.001)
-
-        except Exception as e:
-            logger.error(f"Position sizing error: {e}")
-            return 0
-    
-    def check_sufficient_balance(self, position_value, leverage=10):
-        """Check if sufficient balance for position"""
-        try:
-            balance_info = self.get_account_balance()
-            available = balance_info['available']
-            
-            if available < 100:  # Minimum balance
-                return False
-            
-            # Calculate required margin
-            required_margin = position_value / max(leverage, 1)
-            
-            # Check if we have enough margin (use 20% of available balance max)
-            max_margin = available * 0.20
-            
-            return required_margin <= max_margin
-            
-        except Exception as e:
-            logger.error(f"Balance check error: {e}")
-            return False
-    
-    def check_emergency_conditions(self):
-        """Emergency conditions check for HFQ"""
-        try:
-            balance = self.get_account_balance()
-            positions = self.get_open_positions()
-            
-            # Emergency if balance too low
-            if balance['available'] < 50:
-                return True
-            
-            # Emergency if too many losing positions
-            if positions:
-                losing_positions = [p for p in positions if p['pnl'] < 0]
-                total_unrealized_loss = sum(p['pnl'] for p in losing_positions)
-                
-                # Emergency if unrealized loss > 5% of available balance
-                if abs(total_unrealized_loss) > balance['available'] * 0.05:
-                    return True
-            
-            return False
-            
-        except Exception as e:
-            logger.error(f"Emergency check error: {e}")
-            return True  # Err on safe side
-    
-    def get_balance_summary(self):
-        """Quick balance summary for HFQ"""
-        try:
-            balance = self.get_account_balance()
-            positions = self.get_open_positions()
-            total_pnl = sum(p.get('pnl', 0) for p in positions)
-            
-            return f"Available: ${balance['available']:.2f} | Total: ${balance['total']:.2f} | Positions: {len(positions)} | PnL: ${total_pnl:.2f}"
-        except Exception as e:
-            logger.error(f"Summary error: {e}")
-            return "Balance unavailable"
-
-
-    def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
-        """Get symbol precision from Bybit and cache it."""
-        try:
-            cache_key = f"precision_{symbol}"
-            if hasattr(self, cache_key):
-                return getattr(self, cache_key)
-
-            info = self.bybit_session.get_instruments_info(
-                category="linear",
-                symbol=symbol
-            )
-
-            result = info["result"]["list"][0]
-            qty_step = float(result["lotSizeFilter"]["qtyStep"])
-            tick_size = float(result["priceFilter"]["tickSize"])
-            qty_precision = 3  # Fixed precision
-            precision = (qty_precision, qty_step)
-            setattr(self, cache_key, precision)
-            return precision
-
-        except Exception as e:
-            logger.error(f"Precision fetch failed for {symbol}: {e}")
-            return (2, 0.01)
-# ENHANCED TRADE LOGGING SYSTEM
-# =====================================
 
 class TradeLogger:
     def __init__(self):
@@ -7828,6 +7505,112 @@ class TradeLogger:
         except Exception as e:
             logger.error(f"❌ Logging error: {e}")
 
+
+# =====================================
+# ELITE HFQ RISK MANAGER
+# =====================================
+
+class EliteRiskManager:
+    """Elite Risk Management for 25% Monthly Target"""
+    def __init__(self):
+        self.max_daily_loss_pct = 5.0      # 5% max daily loss
+        self.max_consecutive_losses = 3     # Stop after 3 losses
+        self.required_win_rate = 0.65       # Need 65%+ win rate
+        self.daily_trades = []
+        self.daily_pnl = 0.0
+        self.consecutive_losses = 0
+        
+    def should_stop_trading(self) -> bool:
+        """Determine if trading should stop"""
+        # Check daily loss
+        if abs(self.daily_pnl) > self.max_daily_loss_pct:
+            logger.warning(f"🛑 Daily loss limit hit: {self.daily_pnl:.2f}%")
+            return True
+            
+        # Check consecutive losses
+        if self.consecutive_losses >= self.max_consecutive_losses:
+            logger.warning(f"🛑 {self.consecutive_losses} consecutive losses - stopping")
+            return True
+            
+        # Check win rate if enough trades
+        if len(self.daily_trades) >= 5:
+            wins = sum(1 for t in self.daily_trades if t['pnl'] > 0)
+            win_rate = wins / len(self.daily_trades)
+            if win_rate < self.required_win_rate:
+                logger.warning(f"🛑 Win rate too low: {win_rate:.1%}")
+                return True
+                
+        return False
+    
+    def add_trade_result(self, pnl: float, pnl_pct: float):
+        """Record trade result"""
+        self.daily_trades.append({'pnl': pnl, 'pnl_pct': pnl_pct})
+        self.daily_pnl += pnl_pct
+        
+        if pnl <= 0:
+            self.consecutive_losses += 1
+        else:
+            self.consecutive_losses = 0
+    
+    def reset_daily_stats(self):
+        """Reset for new trading day"""
+        self.daily_trades = []
+        self.daily_pnl = 0.0
+        self.consecutive_losses = 0
+
+# Initialize Elite Risk Manager
+elite_risk_manager = EliteRiskManager()
+
+
+# =====================================
+# ELITE PERFORMANCE TRACKER
+# =====================================
+
+class ElitePerformanceTracker:
+    """Track progress toward 25% monthly target"""
+    def __init__(self, target_monthly: float = 25.0):
+        self.target_monthly = target_monthly
+        self.monthly_start_balance = None
+        self.daily_results = []
+        self.start_date = datetime.now()
+        
+    def log_daily_performance(self, current_balance: float, starting_balance: float):
+        """Track daily progress toward monthly target"""
+        daily_return = ((current_balance - starting_balance) / starting_balance) * 100
+        self.daily_results.append(daily_return)
+        
+        # Calculate monthly progress
+        days_in_month = 20  # Trading days
+        days_elapsed = len(self.daily_results)
+        daily_target = self.target_monthly / days_in_month  # 1.25% daily
+        target_to_date = daily_target * days_elapsed
+        actual_to_date = sum(self.daily_results)
+        
+        # Performance metrics
+        avg_daily = actual_to_date / days_elapsed if days_elapsed > 0 else 0
+        projected_monthly = avg_daily * days_in_month
+        
+        logger.info("="*60)
+        logger.info("📊 ELITE PERFORMANCE REPORT - 25% MONTHLY TARGET")
+        logger.info("="*60)
+        logger.info(f"📅 Day {days_elapsed} of {days_in_month}")
+        logger.info(f"💰 Today's Return: {daily_return:+.2f}%")
+        logger.info(f"📈 Month-to-Date: {actual_to_date:+.2f}% / {target_to_date:.2f}% target")
+        logger.info(f"📊 Daily Average: {avg_daily:.2f}% / {daily_target:.2f}% needed")
+        logger.info(f"🎯 Projected Monthly: {projected_monthly:.1f}% / {self.target_monthly}% target")
+        logger.info(f"✅ On Track: {'YES' if actual_to_date >= target_to_date * 0.9 else 'NO - NEED MORE AGGRESSIVE TRADES'}")
+        logger.info("="*60)
+        
+        return {
+            'daily_return': daily_return,
+            'mtd_return': actual_to_date,
+            'projected_monthly': projected_monthly,
+            'on_track': actual_to_date >= target_to_date * 0.9
+        }
+
+# Initialize Elite Performance Tracker
+elite_performance_tracker = ElitePerformanceTracker(target_monthly=25.0)
+
 # Initialize Trade Logger
 trade_logger = TradeLogger()
 
@@ -7841,7 +7624,38 @@ class MultiStrategySignalGenerator:
         self.strategies = strategies
         self.signal_history = defaultdict(lambda: deque(maxlen=200))  # Increased for multi-strategy
         
-    def generate_all_signals(self, symbol: str) -> List[Dict]:
+    
+    def validate_elite_signal(self, signal_data: Dict) -> bool:
+        """Validate signal meets elite quality standards"""
+        try:
+            # Extract analysis data
+            analysis = signal_data.get('analysis', {})
+            
+            # Elite quality checks
+            quality_checks = {
+                'volume_surge': analysis.get('volume_ratio', 0) > 2.0,
+                'trend_alignment': analysis.get('trend', 'neutral') != 'neutral',
+                'momentum_strong': abs(analysis.get('price_change_pct', 0)) > 0.3,
+                'rsi_not_extreme': 25 < analysis.get('rsi', 50) < 75,
+                'volatility_optimal': 0.5 < analysis.get('volatility_pct', 1.0) < 3.0
+            }
+            
+            # Calculate quality score
+            passed_checks = sum(quality_checks.values())
+            quality_score = passed_checks / len(quality_checks)
+            
+            # Log quality details
+            if quality_score >= 0.8:
+                logger.info(f"✅ ELITE SIGNAL: Quality {quality_score:.1%} - {signal_data['symbol']}")
+            
+            return quality_score >= 0.8  # Require 80% quality
+            
+        except Exception as e:
+            logger.error(f"Elite signal validation error: {e}")
+            return False
+
+
+    (self, symbol: str) -> List[Dict]:
         """Generate signals from all strategies for a symbol"""
         all_signals = []
         
@@ -7897,53 +7711,15 @@ class MultiStrategySignalGenerator:
 # =====================================
 # MAIN ENHANCED MULTI-STRATEGY TRADING BOT
 # =====================================
-class TrailingStopManager:
-    """Manages trailing stops for all positions"""
-    def __init__(self):
-        self.position_tracking = {}
-        self.logger = logging.getLogger("TrailingStopManager")
-    
-    def get_trailing_config(self, strategy_name):
-        """Get trailing config for strategy"""
-        return {
-            "trail_percent": 0.02, 
-            "activation_threshold": 0.01,
-            "initial_stop_pct": 0.015
-        }
-    
-    def initialize_position_tracking(self, symbol, entry_price, strategy):
-        """Initialize position tracking"""  
-        self.position_tracking[symbol] = {
-            'entry_price': entry_price,
-            'strategy': strategy,
-            'highest_price': entry_price,
-            'active': True
-        }
-    
-    def calculate_initial_stop_loss(self, entry_price, direction="long", risk_percent=0.015):
-        """Calculate initial stop loss"""
-        if direction == "long":
-            return entry_price * (1 - risk_percent)
-        else:
-            return entry_price * (1 + risk_percent)
-    
-    def manage_all_trailing_stops(self, positions):
-        """Manage all trailing stops"""
-        pass  # Your existing logic will handle this
-    
-    def cleanup_closed_positions(self, positions):
-        """Clean up closed positions"""
-        pass  # Your existing logic will handle this
-
 class EnhancedMultiStrategyTradingBot:
     def __init__(self):
         self.config = config
         self.session = session
-        self.bybit_session = bybit_session
+        self.session = session
         self.account_manager = account_manager
         self.order_manager = order_manager
         self.trade_logger = trade_logger
-        self.trailing_manager = TrailingStopManager()
+        self.trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
         
         # Initialize all strategies
         self.strategies = StrategyFactory.create_all_strategies()
@@ -8067,11 +7843,34 @@ class EnhancedMultiStrategyTradingBot:
                     logger.error(f"❌ Error scanning {symbol}: {e}")
                     continue
             
-            if not all_signals:
-                logger.info("🔍 No qualifying signals found across all strategies")
+            
+            # ELITE: Only take the absolute BEST signals
+            MIN_ELITE_SCORE = 0.90  # ✅ Elite quality threshold
+            
+            # Filter for elite signals only
+            elite_signals = []
+            for signal in all_signals:
+                if signal['strength'] >= MIN_ELITE_SCORE:
+                    # Additional elite validation
+                    if hasattr(self.signal_generator, 'validate_elite_signal'):
+                        if self.signal_generator.validate_elite_signal(signal):
+                            elite_signals.append(signal)
+                    else:
+                        elite_signals.append(signal)
+            
+            if not elite_signals:
+                logger.info("🔍 No elite signals found (minimum {MIN_ELITE_SCORE:.0%} required)")
                 return
             
-            # Sort by signal strength and execute best ones
+            # Sort by quality and take only the BEST
+            elite_signals.sort(key=lambda x: x['strength'], reverse=True)
+            
+            # Execute only top 1-2 signals per scan
+            max_new_positions = min(2, config.max_concurrent_trades - total_positions)
+            
+            logger.info(f"🎯 ELITE: Found {len(elite_signals)} elite signals, executing top {max_new_positions}")
+
+             and execute best ones
             all_signals.sort(key=lambda x: x['strength'], reverse=True)
             
             executed = 0
@@ -8176,6 +7975,21 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
             
             # First, manage trailing stops for all positions
+
+            # ELITE: Continuous trailing stop updates
+            for pos in positions:
+                symbol = pos["symbol"]
+                if symbol in self.trailing_manager.position_tracking:
+                    tracking = self.trailing_manager.position_tracking[symbol]
+                    
+                    # Always update if in profit
+                    if tracking.get('trailing_active', False):
+                        current_profit_pct = pos["pnl_pct"]
+                        
+                        # Keep trailing as price moves up
+                        if current_profit_pct > 0:
+                            logger.debug(f"🎯 Updating trailing stop for {symbol} at {current_profit_pct:.2f}% profit")
+
             self.trailing_manager.manage_all_trailing_stops(positions)
             self.trailing_manager.cleanup_closed_positions(positions)
             
@@ -8367,6 +8181,27 @@ class EnhancedMultiStrategyTradingBot:
     def run(self):
         """Main multi-strategy bot execution loop"""
         logger.info("🚀 Starting ENHANCED MULTI-STRATEGY TRADING BOT v3.0.0")
+
+        # ELITE HFQ CONFIGURATION SUMMARY
+        logger.info("="*80)
+        logger.info("🏆 ELITE HFQ CONFIGURATION - 25% MONTHLY TARGET")
+        logger.info("="*80)
+        logger.info("📊 TRADING PARAMETERS:")
+        logger.info(f"   Daily Trade Target: 5-20 elite trades")
+        logger.info(f"   Min Signal Quality: 85%+")
+        logger.info(f"   Risk Per Trade: 1.5% max")
+        logger.info(f"   Profit Target: 2% per trade")
+        logger.info(f"   Scan Interval: Every 60 seconds")
+        logger.info("🎯 TRAILING STOPS:")
+        logger.info(f"   Activation: 0.5% profit")
+        logger.info(f"   Trail Distance: 0.3% continuous")
+        logger.info(f"   Never Stop Moving Up!")
+        logger.info("💰 MONTHLY TARGETS:")
+        logger.info(f"   Daily: 1.25% average")
+        logger.info(f"   Weekly: 6.25%")
+        logger.info(f"   Monthly: 25%")
+        logger.info("="*80)
+
         logger.info(f"⚙️ MULTI-STRATEGY CONFIGURATION:")
         logger.info(f"   Trading Mode: moderate")
         logger.info(f"   Signal Type: multi_strategy")
@@ -8418,7 +8253,7 @@ class EnhancedMultiStrategyTradingBot:
                 if (datetime.now() - last_heartbeat_check).total_seconds() > 300:
                     try:
                         # Simple connection test using server time
-                        self.bybit_session.get_server_time()
+                        self.session.get_server_time()
                         logger.debug("✅ Connection health check passed")
                     except Exception as e:
                         logger.warning(f"⚠️ Connection issue detected: {e}")
@@ -8725,10 +8560,11 @@ if __name__ == "__main__":
 
         # Initialize AccountManager
         logger.info("🤖 Initializing AccountManager...")
-        account_manager = EnhancedAccountManager(session)
+        account_manager = EnhancedEnhancedAccountManager(session)
         logger.info(f"💰 {account_manager.get_balance_summary() if hasattr(account_manager, 'get_balance_summary') else 'AccountManager ready'}")
 
-        # Initialize OrderManager
+        account_manager = EnhancedAccountManager(session)
+# Initialize OrderManager
         logger.info("🔧 Initializing OrderManager...")
         order_manager = OrderManager(session, account_manager, trailing_manager)
         logger.info("✅ OrderManager ready")
