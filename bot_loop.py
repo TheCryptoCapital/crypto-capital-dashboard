@@ -1,4 +1,3 @@
-# =====================================
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
 # Author: Jonathan Ferrucci (Complete Version)
@@ -23,6 +22,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque  # ✅ Keep this one
+from typing import Tuple
 # Removed duplicate datetime and deque imports
 
 # Load environment variables
@@ -192,7 +192,7 @@ class TradingConfig:
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
     scan_interval: int = 15                          # ✅ 15 seconds
-    min_signal_strength: float = 0.70                # Higher quality for fees
+    min_signal_strength=0.05                # Higher quality for fees
     
     # Symbols and Markets
     symbols: List[str] = field(default_factory=list)
@@ -536,37 +536,68 @@ class TechnicalAnalysis:
         self.cache_max_size = 500  # HF: Larger cache for more symbols
         
     def get_kline_data(self, symbol: str, interval: str = "5", limit: int = 100) -> Optional[pd.DataFrame]:
-        """HF-Optimized kline data with aggressive caching"""
+        """HF-Optimized kline data with aggressive caching - V5 API"""
         try:
             cache_key = f"{symbol}_{interval}_{limit}"
-            
+        
             with self.cache_lock:
                 if cache_key in self.price_cache:
                     cached_data, cache_time = self.price_cache[cache_key]
                     if (datetime.now() - cache_time).total_seconds() < self.cache_max_age:
                         return cached_data
-            
+        
             # HF: Use performance logger for API timing
             start_time = time.time()
-            klines = self.bybit_session.safe_api_call(
-                self.session.get_kline,
-                category="linear",
-                symbol=symbol,
-                interval=interval,
-                limit=limit
-            )
+        
+            # ✅ NEW V5 API DIRECT CALL:
+            import requests
+            import os
+        
+            # Use V5 endpoints
+            base_url = "https://api.bybit.com"
+            # ✅ ADD THIS TIMEFRAME MAPPING RIGHT HERE:
+            timeframe_mapping = {
+                '1': '1', '3': '3', '5': '5', 
+                '8': '5',    # Map 8min → 5min
+                '15': '15', 
+                '1h': '60',  # Map 1h → 60min  
+                '1s': '1'    # Map 1s → 1min
+            }
+            mapped_interval = timeframe_mapping.get(interval, interval)
+
+            # MODIFY your existing params to use mapped_interval:
+            params = {
+                'category': 'spot',  # Use 'linear' for futures
+                'symbol': symbol,
+                'interval': mapped_interval,  # ← CHANGE FROM interval TO mapped_interval
+                'limit': limit
+            }
+        
+            response = requests.get(f"{base_url}/v5/market/kline", params=params, timeout=10)
             api_duration = time.time() - start_time
-            
-            if not klines or "result" not in klines:
+        
+            if response.status_code != 200:
+                config.log_hf_error("KLINE_FETCH_FAILED", f"HTTP {response.status_code} for {symbol}", symbol)
+                return None
+        
+            data = response.json()
+            if data.get('retCode') != 0:
+                config.log_hf_error("KLINE_FETCH_FAILED", f"API Error: {data.get('retMsg', 'Unknown')} for {symbol}", symbol)
+                return None
+        
+            # ✅ V5 RESPONSE PARSING:
+            kline_list = data.get('result', {}).get('list', [])
+            if not kline_list:
                 config.log_hf_error("KLINE_FETCH_FAILED", f"No data for {symbol}", symbol)
                 return None
-                
+            
             # Convert to DataFrame with optimized processing
             try:
                 df = pd.DataFrame(
-                    klines["result"]["list"],
+                    kline_list,
                     columns=["timestamp", "open", "high", "low", "close", "volume", "turnover"]
                 )
+            # Rest of your existing code stays the same...
                 
                 # Fast conversion to numeric types
                 numeric_cols = ['open', 'high', 'low', 'close', 'volume', 'turnover']
@@ -1643,22 +1674,23 @@ class EliteStrategyConfig(StrategyConfig):
     - Real-time regime adaptation
     - Institutional-grade execution
     """
+  
     def __init__(self, name: str, max_positions: int, position_value: float, 
                  # Parent class parameters
                  min_confidence: float = 0.75,          # ↑ Higher threshold for HFQ
-                 risk_per_trade: float = 150.0,         # ↑ Optimized for HF trading
+                 risk_per_trade_pct: float = 1.5,         # ↑ Optimized for HF trading
                  enabled: bool = True, 
                  signal_cache_seconds: int = 15,        # ↓ Faster cache for HFQ
                  max_daily_trades: int = 200,           # ↑ Higher for HFQ
                  max_drawdown_pct: float = 3.0,         # ↓ Tighter control for HF
                  allowed_symbols = None,
-                 
+
                  # 🎯 ELITE HFQ PERFORMANCE PARAMETERS
                  profit_target_pct: float = 2.5,        # ↑ Higher targets with better signals
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
-                 min_signal_strength: float = 0.80,     # ↑ Elite signal quality threshold
+                 min_signal_strength=0.05,     # ↑ Elite signal quality threshold
                  
                  # 🧠 ADVANCED ML & REGIME FEATURES
                  regime_adaptive: bool = True,           # Elite regime detection
@@ -1716,19 +1748,20 @@ class EliteStrategyConfig(StrategyConfig):
                  multi_venue_arbitrage: bool = True,   # Cross-venue opportunities
                  
                  # 🔥 ULTRA-HFQ PARAMETERS
-                 microsecond_timing: bool = True,      # Ultra-precise timing
-                 tick_level_analysis: bool = True,     # Tick-by-tick analysis
-                 order_book_imbalance: bool = True,    # Level 2 order book analysis
-                 flash_crash_protection: bool = True,  # Flash crash detection
-                 circuit_breaker_aware: bool = True,   # Exchange circuit breaker awareness
-                 co_location_optimization: bool = True # Co-location advantages
-                 ): 
+                 microsecond_timing: bool = True,         # Ultra-precise timing
+                 tick_level_analysis: bool = True,        # Tick-by-tick analysis
+                 order_book_imbalance: bool = True,       # Level 2 order book analysis
+                 flash_crash_protection: bool = True,     # Flash crash detection
+                 circuit_breaker_aware: bool = True,      # Exchange circuit breaker awareness
+                 co_location_optimization: bool = True):  # Co-location advantages
+                  
         
         # Initialize parent class first
         super().__init__(name, max_positions, position_value, min_confidence, 
-                        risk_per_trade, enabled, signal_cache_seconds, 
-                        max_daily_trades, max_drawdown_pct, allowed_symbols or [])
-        
+                         enabled, signal_cache_seconds, 
+                         max_daily_trades, max_drawdown_pct, allowed_symbols or [])
+        self.risk_per_trade_pct = risk_per_trade_pct
+
         # Initialize elite-specific attributes
         self.profit_target_pct = profit_target_pct
         self.max_loss_pct = max_loss_pct
@@ -1772,6 +1805,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.trading_mode = 'moderate'  # Trading mode
         self.log_hf_error = log_hf_error  # Assign the HF error logging function
         self.max_concurrent_trades = 15  # Max concurrent trades
+        self.max_loss_per_trade = 0.02  # ✅ PATCHED: Fixes missing attribute error
 
 # =====================================
 # STRATEGY-SPECIFIC CONFIGURATIONS
@@ -1780,69 +1814,96 @@ class EliteStrategyConfig(StrategyConfig):
 def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
     """Get optimized configurations for each strategy type"""
     return {
-        StrategyType.RSI_SCALP: StrategyConfig(
+    StrategyType.RSI_SCALP: StrategyConfig(
             name="RSI_Scalp_Fast",
-            max_positions=1,
-            position_value=150.0,
+            max_positions=3,
+            position_value=0,
+            position_sizing_method="risk_based",
+            risk_per_trade_pct=1.5,
             min_confidence=0.75,
-            max_daily_trades=80,  # High frequency for scalping
-            signal_cache_seconds=15,  # Shorter cache for fast moves
-            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],  # Fastest movers
-            max_drawdown_pct=3.0  # Tighter control for scalping
-        ),
+            max_daily_trades=80,
+            signal_cache_seconds=15,
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
+            'DOGEUSDT', 'AVAXUSDT', 'LINKUSDT', 'MATICUSDT', 'DOTUSDT', 'ATOMUSDT'
+            ],
+            max_drawdown_pct=3.0
+    ),
         
         StrategyType.EMA_CROSS: StrategyConfig(
-            name="EMA_Cross_Swing",
-            max_positions=1,
-            position_value=200.0,
-            min_confidence=0.65,
-            max_daily_trades=20,  # Lower frequency for swing trades
-            signal_cache_seconds=60,  # Longer cache for swing signals
-            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT'],  # Stable for swings
-            max_drawdown_pct=6.0  # More tolerance for swing trades
-        ),
-        
+        name="EMA_Cross_Swing",
+        max_positions=2,
+        position_value=0,                            # ✅ Use dynamic risk sizing
+        position_sizing_method="risk_based",         # ✅ Enable HFQ sizing
+        risk_per_trade_pct=1.5,                      # ✅ 1.5% of balance per trade
+        min_confidence=0.65,
+        max_daily_trades=20,                         # Lower frequency for swing trades
+        signal_cache_seconds=60,                     # Longer cache for swing signals
+        allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT', 'XRPUSDT', 'LINKUSDT',
+            'SOLUSDT', 'BNBUSDT', 'AVAXUSDT', 'MATICUSDT', 'ATOMUSDT', 'LTCUSDT'
+        ],  # Stable but broader swing universe
+        max_drawdown_pct=6.0                         # More tolerance for swing trades
+    ),
+
         StrategyType.SCALPING: StrategyConfig(
-            name="Ultra_Scalp",
-            max_positions=1,
-            position_value=100.0,
+        name="Ultra_Scalp",
+            max_positions=4,
+            position_value=0,                            # ✅ Dynamic sizing
+            position_sizing_method="risk_based",         # ✅ Enables % balance sizing
+            risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
             min_confidence=0.8,
-            max_daily_trades=120,  # Highest frequency
-            signal_cache_seconds=10,  # Very short cache
-            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'],  # Ultra-liquid
-            max_drawdown_pct=2.5  # Strictest control
-        ),
+            max_daily_trades=120,                        # Highest frequency
+            signal_cache_seconds=10,                     # Very short cache
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT', 'MATICUSDT', 'XRPUSDT',
+            'DOGEUSDT', 'BNBUSDT', 'LINKUSDT', 'DOTUSDT', 'ADAUSDT', 'ATOMUSDT'
+            ],  # Expanded to 12 high-liquidity pairs
+            max_drawdown_pct=2.5                         # Strictest control
+    ),
+
         
-        StrategyType.MACD_MOMENTUM: StrategyConfig(
+    StrategyType.MACD_MOMENTUM: StrategyConfig(
             name="MACD_Momentum",
-            max_positions=1,
-            position_value=250.0,
+            max_positions=2,
+            position_value=0,                            # ✅ Enable dynamic sizing
+        position_sizing_method="risk_based",         # ✅ Use risk-based logic
+            risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
             min_confidence=0.7,
-            max_daily_trades=30,  # Medium frequency
-            signal_cache_seconds=45,  # Medium cache
-            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'LINKUSDT', 'MATICUSDT', 'UNIUSDT'],  # Momentum pairs
-            max_drawdown_pct=7.0  # More tolerance for momentum
-        ),
+            max_daily_trades=30,                         # Medium frequency
+            signal_cache_seconds=45,                     # Medium cache
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'LINKUSDT', 'MATICUSDT', 'UNIUSDT',
+            'AVAXUSDT', 'SOLUSDT', 'DOTUSDT', 'XRPUSDT', 'ATOMUSDT', 'LTCUSDT'
+            ],  # Expanded for more momentum options
+            max_drawdown_pct=7.0                         # More tolerance for momentum
+    ),
+
         
         # ✅ FIXED - Added the missing RSI_OVERSOLD strategy
-        StrategyType.RSI_OVERSOLD: StrategyConfig(
+    StrategyType.RSI_OVERSOLD: StrategyConfig(
             name="RSI_Oversold_Recovery",
-            max_positions=1,
-            position_value=180.0,
+            max_positions=3,
+            position_value=0,                            # ✅ Enable dynamic sizing
+            position_sizing_method="risk_based",         # ✅ Risk-based sizing logic
+            risk_per_trade_pct=1.5,                      # ✅ 1.5% risk per trade
             min_confidence=0.72,
             max_daily_trades=40,
             signal_cache_seconds=25,
-            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'],
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT', 'XRPUSDT', 'LINKUSDT',
+            'AVAXUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'BNBUSDT', 'ATOMUSDT'
+            ],  # Expanded to 12 strong RSI-responsive symbols
             max_drawdown_pct=4.0
-        ),
+    ),
         
         # ✅ NEW - HFQ-Lite Volume Spike Strategy (Your 150 trades/day)
         StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
             name="HFQ_Volume_Spike",
-            max_positions=1,                    # Higher concurrent positions
-            position_value=1200.0,             # Max position cap
+            max_positions=1,                   # Higher concurrent positions
+            position_value=0,                  # Max position cap
             min_confidence=0.70,               # 70% minimum quality
-            risk_per_trade=150.0,              # 1.5% risk per trade
+            risk_per_trade=1.5,                # 1.5% risk per trade
             max_daily_trades=150,              # ✅ Your 150 trades/day target
             signal_cache_seconds=5,            # Fast 5-second scanning
             max_drawdown_pct=12.0,             # 12% max portfolio risk
@@ -2065,6 +2126,7 @@ class BaseStrategy:
             return None
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        return "Buy", 0.95, {"test": True}  # ✅ Trigger forced signal
         """
         Override in each strategy
         Args:
@@ -5362,7 +5424,7 @@ class HybridCompositeStrategy(BaseStrategy):
         self.elite_quality = 0.92                # 92% elite quality
         
         # Signal strength thresholds (HFQ optimized)
-        self.min_signal_strength = 0.55          # Lower threshold for HFQ
+        self.min_signal_strength=0.05          # Lower threshold for HFQ
         self.strong_signal_threshold = 0.70      # Strong signal threshold
         self.elite_signal_threshold = 0.85       # Elite signal threshold
         
@@ -6063,6 +6125,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,                 # ↑ Increased for elite performance
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this    
         profit_target_pct=2.2,           # ↑ Optimized target
         max_loss_pct=0.8,               # ↓ Tighter stops with better entries
         leverage=12,                     # ↑ Higher leverage with better risk control
@@ -6082,6 +6146,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
         profit_target_pct=2.8,           # ↑ Higher targets with better timing
         max_loss_pct=0.9,               # 1% stop loss distance
         leverage=10,
@@ -6100,6 +6166,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,                 # ↑ More positions for scalping
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
         profit_target_pct=0.9,           # ↑ Slightly higher with better entries
         max_loss_pct=0.4,               # ↓ Extremely tight stops
         leverage=15,                     # ↑ Maximum leverage for scalping
@@ -6111,6 +6179,7 @@ STRATEGY_CONFIGS = {
         execution_alpha=True,
         min_sharpe_threshold=2.5,
         daily_trade_limit=80
+
     ),
     
     StrategyType.MACD_MOMENTUM: EliteStrategyConfig(
@@ -6118,6 +6187,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
         profit_target_pct=3.2,           # ↑ Higher momentum targets
         max_loss_pct=1.0,               # 1% stop loss distance
         leverage=8,
@@ -6137,6 +6208,8 @@ STRATEGY_CONFIGS = {
         enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,                 # ↑ More positions for volume opportunities
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
         profit_target_pct=1.8,           # ↑ Higher targets with better detection
         max_loss_pct=0.8,
         leverage=12,
@@ -6155,6 +6228,8 @@ STRATEGY_CONFIGS = {
         enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
         profit_target_pct=2.3,           # ↑ Optimized mean reversion targets
         max_loss_pct=0.9,
         leverage=10,
@@ -6192,6 +6267,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,                 # Dedicated positions for funding
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
         profit_target_pct=0.4,           # Small but consistent
         max_loss_pct=0.15,              # Very tight stops
         leverage=5,                      # Conservative for arbitrage
@@ -6209,6 +6286,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this
         profit_target_pct=1.8,           # Quick profits on news
         max_loss_pct=0.7,
         leverage=18,                     # High leverage for fast moves
@@ -6227,24 +6306,28 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,
         position_value=0,
-        profit_target_pct=2.8,           # Higher targets for high confidence
-        max_loss_pct=1.0,
-        leverage=12,
-        scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "SOLUSDT"],
-        timeframe="5",
-        min_signal_strength=0.88,        # Very high confidence required
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this        
+        profit_target_pct=1.8,           # Quick profits on news
+        max_loss_pct=0.7,
+        leverage=18,                     # High leverage for fast moves
+        scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        timeframe="1",
+        min_signal_strength=0.88,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=2.1,
-        daily_trade_limit=20             # Quality over quantity
+        daily_trade_limit=20             # Quality over qu
     ),
-    
+  
     StrategyType.CROSS_MOMENTUM: EliteStrategyConfig(
         name="Cross-Asset Momentum AI",
         enabled=True,
         max_positions=1,
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ YES
+        risk_per_trade_pct=1.5,               # ✅ YES
         profit_target_pct=2.1,
         max_loss_pct=0.9,
         leverage=10,
@@ -6265,6 +6348,8 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ YES
+        risk_per_trade_pct=1.5,               # ✅ YES
         profit_target_pct=2.5,
         max_loss_pct=0.8,
         leverage=12,
@@ -6284,8 +6369,10 @@ STRATEGY_CONFIGS = {
         enabled=True,                    # Enable for elite performance
         max_positions=1,                 # High frequency opportunities
         position_value=0,
+        position_sizing_method="risk_based",  # ✅ YES
+        risk_per_trade_pct=1.5,               # ✅ YES       
         profit_target_pct=0.6,           # Quick scalp profits
-        max_loss_pct=0.25,              # Very tight stops
+        max_loss_pct=0.25,               # Very tight stops
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
         timeframe="1s",                  # Sub-minute execution
@@ -6302,18 +6389,20 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=1,
         position_value=0,
-        profit_target_pct=0.3,           # Small but risk-free profits
-        max_loss_pct=0.1,               # Minimal risk arbitrage
-        leverage=3,                      # Conservative arbitrage leverage
+        position_sizing_method="risk_based",  # ✅ YES
+        risk_per_trade_pct=1.5,               # ✅ YES             
+        profit_target_pct=0.3,                # Small but risk-free profits
+        max_loss_pct=0.1,                     # Minimal risk arbitrage
+        leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="1",
-        min_signal_strength=0.98,        # Near-certain arbitrage only
+        min_signal_strength=0.92,             # Near-certain arbitrage only
         latency_critical=True,
         execution_alpha=True,
         smart_routing=True,
-        min_sharpe_threshold=4.0,        # Very high Sharpe for arbitrage
+        min_sharpe_threshold=4.0,             # Very high Sharpe for arbitrage
         daily_trade_limit=50
-    ),
+    ),       
     
     # ========== LEGACY STRATEGIES (NOW ENHANCED) ==========
     
@@ -6323,7 +6412,7 @@ STRATEGY_CONFIGS = {
         max_positions=1,
         position_value=0,
         profit_target_pct=2.5,           # ↑ Higher target for breakouts
-        max_loss_pct=1.2,               # ↑ Slightly wider stop for volatility
+        max_loss_pct=1.2,                # ↑ Slightly wider stop for volatility
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
@@ -6369,7 +6458,7 @@ class EliteStrategyFactory:
             StrategyType.EMA_CROSSOVER: "EMAStrategy", 
             StrategyType.SCALPING: "ScalpingStrategy",
             StrategyType.MACD_MOMENTUM: "MACDStrategy",
-            StrategyType.VOLUME_SPIKE: "VolumeSpikeStrategy",      # ← HFQ Version
+            StrategyType.VOLUME_SPIKE: "VolumeSpikeStrategy",       # ← HFQ Version
             StrategyType.BOLLINGER_BANDS: "BollingerBandsStrategy", # ← HFQ Version
             StrategyType.REGIME_ADAPTIVE: "RegimeAdaptiveStrategy",
             StrategyType.FUNDING_ARBITRAGE: "FundingArbitrageStrategy",
@@ -6494,8 +6583,8 @@ class StrategyFactory:
             raise ValueError(f"No configuration found for {strategy_type}")
         
         strategy_classes = {
-	    StrategyType.RSI_OVERSOLD: RSIStrategy,
-    	    StrategyType.EMA_CROSS: EMAStrategy,
+        StrategyType.RSI_OVERSOLD: RSIStrategy,
+            StrategyType.EMA_CROSS: EMAStrategy,
             StrategyType.SCALPING: ScalpingStrategy,
             StrategyType.MACD_MOMENTUM: MACDStrategy,
             StrategyType.BREAKOUT: BreakoutStrategy,
@@ -6683,10 +6772,11 @@ class AccountManager:
             logger.error(f"❌ Error getting positions: {e}")
             return []
 
+
     def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
-        """Get symbol precision with caching"""
+        """Get symbol precision from Bybit and cache it."""
         try:
-            cachekey = f"precision{symbol}"
+            cache_key = f"precision_{symbol}"
             if hasattr(self, cache_key):
                 return getattr(self, cache_key)
 
@@ -6695,25 +6785,16 @@ class AccountManager:
                 symbol=symbol
             )
 
-            if info and info.get('retCode') == 0 and info.get("result", {}).get("list"):
-                lot_size_filter = info["result"]["list"][0]["lotSizeFilter"]
-                min_qty = float(lot_size_filter["minOrderQty"])
-                qty_step = float(lot_size_filter["qtyStep"])
-
-                if qty_step >= 1:
-                    precision = 0
-                else:
-                    precision = len(str(qty_step).split('.')[1]) if '.' in str(qty_step) else 0
-
-                result = (precision, min_qty)
-                setattr(self, cache_key, result)
-                return result
-
-            return 3, 0.001
+            result = info["result"]["list"][0]
+            qty_step = float(result["lotSizeFilter"]["qtyStep"])
+            tick_size = float(result["priceFilter"]["tickSize"])
+            precision = (qty_step, tick_size)
+            setattr(self, cache_key, precision)
+            return precision
 
         except Exception as e:
-            logger.error(f"❌ Precision error for {symbol}: {e}")
-            return 3, 0.001
+            self.logger.error(f"Precision fetch failed for {symbol}: {e}")
+            raise
 
 # =====================================
 # ENHANCED ACCOUNT MANAGER
@@ -7157,8 +7238,7 @@ class OrderManager:
     def get_current_price(self, symbol: str) -> Optional[float]:
         """Get current market price with enhanced error handling"""
         try:
-            ticker = self.bybit_session.safe_api_call(
-                self.session.get_tickers,
+            ticker = self.session.get_tickers(
                 category="linear",
                 symbol=symbol
             )
@@ -7214,10 +7294,9 @@ class OrderManager:
             if f"price_precision_{symbol}" in self.precision_cache:
                 return self.precision_cache[f"price_precision_{symbol}"]
             
-            info = self.bybit_session.safe_api_call(
-                self.session.get_instruments_info,
-                category="linear",
-                symbol=symbol
+            info = self.session.get_instruments_info(\
+                category="linear",\
+                symbol=symbol\
             )
             
             if info and "result" in info and info["result"]["list"]:
@@ -7275,16 +7354,13 @@ class OrderManager:
                 
                 logger.info(f"🚀 [{strategy_name}] Placing {side} order: {symbol} {qty} @ ${current_price:.4f} (${position_value:.2f})")
                 
-                order = self.bybit_session.safe_api_call(
-                    self.session.place_order,
-                    category="linear",
-                    symbol=symbol,
-                    side=side,
-                    orderType="Market",
-                    qty=str(qty),
-                    timeInForce="GoodTillCancel",
-                    reduceOnly=False,
-                    closeOnTrigger=False
+                order = self.session.place_order(\
+                    category="linear",\
+                    symbol=symbol,\
+                    side=side,\
+                    orderType="Market",\
+                    qty=str(qty),\
+                    timeInForce="GoodTillCancel"\
                 )
                 
                 if order and "result" in order:
@@ -7348,11 +7424,11 @@ class OrderManager:
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                order_status = self.bybit_session.safe_api_call(
-                    self.session.get_open_orders,
-                    category="linear",
-                    symbol=symbol,
-                    orderId=order_id
+
+                order_status = self.session.get_open_orders(\
+                    category="linear",\
+                    symbol=symbol,\
+                    orderId=order_id\
                 )
                 
                 if order_status and "result" in order_status:
@@ -7373,11 +7449,11 @@ class OrderManager:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                result = self.bybit_session.safe_api_call(
-                    self.session.set_trading_stop,
-                    category="linear",
-                    symbol=symbol,
-                    stopLoss=str(round(stop_price, self._get_price_precision(symbol)))
+                result = self.session.set_trading_stop(\
+                category="linear",\
+                symbol=symbol,\
+                takeProfit=str(round(tp_price, self._get_price_precision(symbol)))\
+                
                 )
                 
                 if result:
@@ -7397,11 +7473,11 @@ class OrderManager:
     def set_take_profit(self, symbol: str, tp_price: float) -> bool:
         """Set take profit with error handling"""
         try:
-            result = self.bybit_session.safe_api_call(
-                self.session.set_trading_stop,
-                category="linear",
-                symbol=symbol,
-                takeProfit=str(round(tp_price, self._get_price_precision(symbol)))
+            result = self.session.set_trading_stop(\
+                category="linear",\
+                symbol=symbol,\
+                takeProfit=str(round(tp_price, self._get_price_precision(symbol)))\
+            
             )
             
             if result:
@@ -7422,15 +7498,15 @@ class OrderManager:
             
             logger.info(f"🔄 [{strategy_name}] Closing position: {symbol} {side} {qty}")
             
-            order = self.bybit_session.safe_api_call(
-                self.session.place_order,
-                category="linear",
-                symbol=symbol,
-                side=close_side,
-                orderType="Market",
-                qty=str(qty),
-                timeInForce="GoodTillCancel",
-                reduceOnly=True
+            order = self.session.place_order(\
+                category="linear",\
+                symbol=symbol,\
+                side=close_side,\
+                orderType="Market",\
+                qty=str(qty),\
+                timeInForce="GoodTillCancel",\
+                reduceOnly=True\
+
             )
             
             if order and "result" in order:
@@ -7564,10 +7640,23 @@ class HFQAccountManager:
             if position_value > available * 0.15:
                 qty = (available * 0.15) / entry_price
             
+            try:
+                info = self.exchange.get_symbol_info(symbol)
+                qty_step = float(info["result"]["list"][0]["lotSizeFilter"]["qtyStep"])
+                precision = int(abs(Decimal(str(qty_step)).as_tuple().exponent))
+                qty = round(qty, precision)
+            except Exception as e:
+                self.logger.warning(f"⚠️ Precision fallback triggered: {e}")
+                qty = round(qty, 3)
+
+            # FIXME_DEBUG: Remove these lines when market data works
+            self.logger.debug(f"🧾 Submitting order — qty={qty}, type={type(qty)}")
+            self.logger.debug(f"📦 Placing order with qty={qty}, type={type(qty)}")
+
             return max(qty, 0.001)
-            
+
         except Exception as e:
-            logger.error(f"Position sizing error: {e}")
+            self.logger.error(f"Position sizing error: {e}")
             return 0
     
     def check_sufficient_balance(self, position_value, leverage=10):
@@ -7627,42 +7716,31 @@ class HFQAccountManager:
         except Exception as e:
             logger.error(f"Summary error: {e}")
             return "Balance unavailable"
-    
-    def get_symbol_precision(self, symbol):
-        """Get symbol precision - simple version for HFQ"""
+
+
+    def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
+        """Get symbol precision from Bybit and cache it."""
         try:
-            # Cache key for precision data
             cache_key = f"precision_{symbol}"
             if hasattr(self, cache_key):
                 return getattr(self, cache_key)
-            
+
             info = self.bybit_session.get_instruments_info(
                 category="linear",
                 symbol=symbol
             )
-            
-            if info and info.get('retCode') == 0 and info.get("result", {}).get("list"):
-                lot_size_filter = info["result"]["list"][0]["lotSizeFilter"]
-                min_qty = float(lot_size_filter["minOrderQty"])
-                qty_step = float(lot_size_filter["qtyStep"])
-                
-                # Calculate precision from qty_step
-                if qty_step >= 1:
-                    precision = 0
-                else:
-                    precision = len(str(qty_step).split('.')[1]) if '.' in str(qty_step) else 0
-                
-                result = (precision, min_qty)
-                setattr(self, cache_key, result)
-                return result
-            
-            # Default fallback
-            return (3, 0.001)
-            
-        except Exception as e:
-            logger.error(f"Precision error for {symbol}: {e}")
-            return (3, 0.001)
 
+            result = info["result"]["list"][0]
+            qty_step = float(result["lotSizeFilter"]["qtyStep"])
+            tick_size = float(result["priceFilter"]["tickSize"])
+            precision = (qty_step, tick_size)
+            setattr(self, cache_key, precision)
+            return precision
+
+        except Exception as e:
+            self.logger.error(f"Precision fetch failed for {symbol}: {e}")
+            raise
+ 
 # =====================================
 # ENHANCED TRADE LOGGING SYSTEM
 # =====================================
@@ -7739,6 +7817,9 @@ class MultiStrategySignalGenerator:
                 # Get appropriate timeframe data for this strategy
                 timeframe = strategy.config.timeframe
                 df = self.ta.get_kline_data(symbol, timeframe, 100)
+                # FIXME_DEBUG: Remove these lines when market data works                
+                logger.info(f"🧪 DEBUG: {strategy.config.name} requesting {timeframe} data for {symbol}")
+                logger.info(f"🧪 DEBUG: Data received: {df is not None}, rows: {len(df) if df is not None else 0}")
                 
                 if df is None or len(df) < 20:
                     continue
@@ -7749,14 +7830,16 @@ class MultiStrategySignalGenerator:
                     continue
                 
                 # Generate signal
-                signal, strength, analysis = strategy.generate_signal(df)
-                
+                signal, strength, analysis = strategy.generate_signal(df) 
+                # FIXME_DEBUG: Remove these lines when market data works 
+                logger.info(f"🧪 DEBUG: {strategy.config.name} → signal='{signal}', strength={strength:.3f}")
+
                 if signal != "Hold" and strength >= strategy.config.min_signal_strength:
                     signal_data = {
                         'timestamp': datetime.now(),
                         'symbol': symbol,
                         'strategy': strategy.config.name,
-                        'strategy_type': strategy_type.value,
+                        'strategy_type': getattr(strategy_type, 'value', strategy_type),
                         'signal': signal,
                         'strength': strength,
                         'analysis': analysis,
