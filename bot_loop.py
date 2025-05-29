@@ -1,4 +1,3 @@
-from decimal import Decimal
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
 # Author: Jonathan Ferrucci (Complete Version)
