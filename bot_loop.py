@@ -14,6 +14,52 @@ import csv
 import json
 import requests
 import threading
+import time
+from collections import deque
+
+class RateLimiter:
+    """
+    Thread-safe rate limiter for API calls
+    Prevents exceeding exchange rate limits
+    """
+    def __init__(self, max_calls_per_second: int = 8):
+        self.max_calls_per_second = max_calls_per_second
+        self.calls = deque()
+        self.lock = threading.Lock()
+        
+    def wait_if_needed(self):
+        """Wait if necessary to respect rate limits"""
+        with self.lock:
+            now = time.time()
+            
+            # Remove calls older than 1 second
+            while self.calls and self.calls[0] <= now - 1.0:
+                self.calls.popleft()
+            
+            # If we are at the limit, wait
+            if len(self.calls) >= self.max_calls_per_second:
+                sleep_time = 1.0 - (now - self.calls[0])
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                    # Clean up old calls after sleeping
+                    now = time.time()
+                    while self.calls and self.calls[0] <= now - 1.0:
+                        self.calls.popleft()
+            
+            # Record this call
+            self.calls.append(now)
+    
+    def can_make_call(self) -> bool:
+        """Check if we can make a call without waiting"""
+        with self.lock:
+            now = time.time()
+            
+            # Remove calls older than 1 second
+            while self.calls and self.calls[0] <= now - 1.0:
+                self.calls.popleft()
+            
+            return len(self.calls) < self.max_calls_per_second
+
 import numpy as np
 from datetime import datetime, timedelta  # ✅ Keep this one
 from dotenv import load_dotenv
@@ -23,6 +69,28 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque  # ✅ Keep this one
+
+# Strategy Types Enumeration
+from enum import Enum
+
+class StrategyType(Enum):
+    RSI_OVERSOLD = "rsi_oversold"
+    EMA_CROSSOVER = "ema_crossover"
+    SCALPING = "scalping"
+    MACD_MOMENTUM = "macd_momentum"
+    VOLUME_SPIKE = "volume_spike"
+    BOLLINGER_BANDS = "bollinger_bands"
+    MARKET_REGIME = "market_regime"
+    FUNDING_RATE = "funding_rate"
+    NEWS_ALPHA = "news_alpha"
+    MULTI_TIMEFRAME = "multi_timeframe"
+    CROSS_ASSET = "cross_asset"
+    ML_ENSEMBLE = "ml_ensemble"
+    ORDER_BOOK = "order_book"
+    ARBITRAGE = "arbitrage"
+    VOLATILITY_BREAKOUT = "volatility_breakout"
+    HYBRID_COMPOSITE = "hybrid_composite"
+
 from typing import Tuple
 # Removed duplicate datetime and deque imports
 
@@ -85,6 +153,30 @@ class TradingMode(Enum):                   # ← CHANGE THE SECOND SignalType TO
     AGGRESSIVE = "aggressive"
     SCALPING = "scalping"
     SWING = "swing"
+
+@dataclass
+class StrategyConfig:
+    """Base configuration for trading strategies"""
+    def __init__(self, name="default", enabled=True, max_positions=1, 
+                 position_value=100, leverage=1, profit_target_pct=2.0, 
+                 max_loss_pct=1.0, risk_per_trade_pct=1.0):
+        self.name = name
+        self.enabled = enabled
+        self.max_positions = max_positions
+        self.position_value = position_value
+        self.leverage = leverage
+        self.profit_target_pct = profit_target_pct
+        self.max_loss_pct = max_loss_pct
+        self.risk_per_trade_pct = risk_per_trade_pct
+        self.min_confidence = 0.7
+        self.max_daily_trades = 50
+        self.timeframe = "5"
+        self.scan_symbols = ["BTCUSDT", "ETHUSDT"]
+        self.min_time_between_trades = 5
+    
+    def validate(self):
+        return True
+
 
 @dataclass
 class TrailingConfig:
@@ -420,6 +512,42 @@ logger.info("⚙️ Initializing HF bot configuration...")
 config = TradingConfig()
 
 # Initialize safety mechanisms with HF optimization
+class CircuitBreaker:
+    """Simple circuit breaker for API safety"""
+    def __init__(self, max_failures=5, timeout=300):
+        self.max_failures = max_failures
+        self.timeout = timeout
+        self.failures = 0
+        self.last_failure_time = 0
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+    
+    def call(self, func, *args, **kwargs):
+        """Execute function with circuit breaker protection"""
+        import time
+        now = time.time()
+        
+        # Reset if timeout passed
+        if self.state == "OPEN" and (now - self.last_failure_time) > self.timeout:
+            self.state = "HALF_OPEN"
+            self.failures = 0
+        
+        # Block if circuit is open
+        if self.state == "OPEN":
+            raise Exception("Circuit breaker is OPEN")
+        
+        try:
+            result = func(*args, **kwargs)
+            if self.state == "HALF_OPEN":
+                self.state = "CLOSED"
+            return result
+        except Exception as e:
+            self.failures += 1
+            self.last_failure_time = now
+            if self.failures >= self.max_failures:
+                self.state = "OPEN"
+            raise
+
+
 logger.info("🛡️ Initializing safety mechanisms...")
 rate_limiter = RateLimiter(max_calls_per_second=8)      # Conservative for HF
 circuit_breaker = CircuitBreaker(max_failures=5, timeout=300)  # 5 failures = 5min timeout
@@ -431,7 +559,7 @@ logger.info(f"   Target: {config.daily_trade_limit} trades/day")
 logger.info(f"   Scan Interval: {config.scan_interval} seconds")
 logger.info(f"   Max Concurrent: {config.max_concurrent_trades}")
 logger.info(f"   Risk Per Trade: {config.risk_per_trade_pct}%")
-logger.info(f"   Rate Limit: {rate_limiter.max_calls} calls/second")
+logger.info(f"   Rate Limit: {rate_limiter.max_calls_per_second} calls/second")
 
 # Memory and performance optimization for HF
 import gc
@@ -606,6 +734,30 @@ def validate_strategy_configs():
 # =====================================
 # STRATEGY 1: RSI SCALPING STRATEGY
 # =====================================
+
+class BaseStrategy:
+    """Base class for all trading strategies"""
+    def __init__(self, strategy_type, config, session, market_data, logger):
+        self.strategy_type = strategy_type
+        self.config = config
+        self.session = session
+        self.market_data = market_data
+        self.logger = logger
+        self.positions = {}
+        self.signals = []
+    
+    def generate_signal(self, symbol, data):
+        """Override in subclasses"""
+        return None
+    
+    def should_enter_trade(self, symbol, data):
+        """Override in subclasses"""
+        return False
+    
+    def calculate_position_size(self, symbol, price):
+        """Basic position sizing"""
+        return 0.1  # Default small size
+
 
 class RSIStrategy(BaseStrategy):
     """
