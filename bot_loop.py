@@ -1058,6 +1058,21 @@ class EnhancedTrailingStopManager:
         self.last_api_call = 0
         self.api_call_interval = 0.125  # 8 calls/sec
         self.signal_cache = {}
+
+    def get_trailing_config(self, strategy_name):
+        """Get trailing stop configuration for a strategy"""
+        class TrailingConfig:
+            def __init__(self):
+                # Default trailing stop settings
+                self.initial_stop_pct = 0.5  # 0.5% initial stop
+                self.trail_amount = 0.2      # 0.2% trailing distance
+                self.break_even_trigger = 0.3 # Move to break-even at 0.3% profit
+        
+        # Return strategy-specific config if available, otherwise default
+        if hasattr(self, "strategy_configs") and strategy_name in self.strategy_configs:
+            return self.strategy_configs[strategy_name]
+        else:
+            return TrailingConfig()
         
         # Background tasks
         self.is_running = False
@@ -1983,6 +1998,21 @@ class BaseStrategy:
         # HF-specific optimizations
         self.last_analysis_time = {}  # Per-symbol analysis timestamps
         self.signal_cache = {}        # Cache recent signals
+
+    def get_trailing_config(self, strategy_name):
+        """Get trailing stop configuration for a strategy"""
+        class TrailingConfig:
+            def __init__(self):
+                # Default trailing stop settings
+                self.initial_stop_pct = 0.5  # 0.5% initial stop
+                self.trail_amount = 0.2      # 0.2% trailing distance
+                self.break_even_trigger = 0.3 # Move to break-even at 0.3% profit
+        
+        # Return strategy-specific config if available, otherwise default
+        if hasattr(self, "strategy_configs") and strategy_name in self.strategy_configs:
+            return self.strategy_configs[strategy_name]
+        else:
+            return TrailingConfig()
         self.cache_duration = timedelta(seconds=config.signal_cache_seconds)
         
         # Performance metrics
