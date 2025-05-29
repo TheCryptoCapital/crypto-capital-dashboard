@@ -1,3 +1,4 @@
+from decimal import Decimal
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
 # Author: Jonathan Ferrucci (Complete Version)
@@ -1128,7 +1129,7 @@ class EnhancedTrailingStopManager:
             with self.lock:
                 strategy_config = self.strategy_configs.get(strategy_name.upper())
                 if not strategy_config:
-                    self.logger.error(f"Unknown strategy config: {strategy_name}")
+                    logger.error(f"Unknown strategy config: {strategy_name}")
                     return False
                 
                 position = TrailingPosition(
@@ -1159,7 +1160,7 @@ class EnhancedTrailingStopManager:
             return True
             
         except Exception as e:
-            self.logger.error(f"Error initializing position tracking: {e}")
+            logger.error(f"Error initializing position tracking: {e}")
             return False
     
     def calculate_initial_stop_loss(self, position: TrailingPosition) -> float:
@@ -1337,7 +1338,7 @@ class EnhancedTrailingStopManager:
                 
         except Exception as e:
             self.hf_performance_stats['failed_updates'] += 1
-            self.logger.error(f"❌ Error updating stop for {position.symbol}: {e}")
+            logger.error(f"❌ Error updating stop for {position.symbol}: {e}")
             return False
     
     async def manage_trailing_stops_for_position(self, position_data: Dict) -> bool:
@@ -1383,7 +1384,7 @@ class EnhancedTrailingStopManager:
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Position management error for {symbol}: {e}")
+            logger.error(f"❌ Position management error for {symbol}: {e}")
             return False
     
     async def manage_all_trailing_stops(self, positions: List[Dict]):
@@ -1417,7 +1418,7 @@ class EnhancedTrailingStopManager:
                     tasks.append(task)
                     
                 except Exception as e:
-                    self.logger.error(f"❌ Error processing {position_data.get('symbol', 'UNKNOWN')}: {e}")
+                    logger.error(f"❌ Error processing {position_data.get('symbol', 'UNKNOWN')}: {e}")
                     continue
             
             # Execute tasks concurrently
@@ -1432,7 +1433,7 @@ class EnhancedTrailingStopManager:
                 self.logger.info(f"✅ Completed {successful_updates}/{len(tasks)} trailing stop updates")
                     
         except Exception as e:
-            self.logger.error(f"❌ Batch trailing stop management error: {e}")
+            logger.error(f"❌ Batch trailing stop management error: {e}")
     
     def cleanup_closed_positions(self, open_positions: List[Dict]):
         """Enhanced cleanup with performance logging"""
@@ -1474,7 +1475,7 @@ class EnhancedTrailingStopManager:
                     self.hf_performance_stats['successful_trails'] += 1
                 
         except Exception as e:
-            self.logger.error(f"❌ Error logging performance: {e}")
+            logger.error(f"❌ Error logging performance: {e}")
     
     def get_hf_performance_stats(self) -> Dict:
         """Enhanced HF performance statistics"""
@@ -1534,7 +1535,7 @@ class EnhancedTrailingStopManager:
                            f"{stats['success_rate']:.1f}% success rate")
                            
         except Exception as e:
-            self.logger.error(f"❌ HF optimization error: {e}")
+            logger.error(f"❌ HF optimization error: {e}")
     
     def _cleanup_signal_cache(self):
         """Clean up expired signal cache entries"""
@@ -1561,7 +1562,7 @@ class EnhancedTrailingStopManager:
                 await asyncio.sleep(300)  # Every 5 minutes
                 self.optimize_for_hf_trading()
             except Exception as e:
-                self.logger.error(f"Background cleanup error: {e}")
+                logger.error(f"Background cleanup error: {e}")
     
     def stop_background_tasks(self):
         """Stop background tasks"""
@@ -2085,7 +2086,7 @@ class BaseStrategy:
             return signal_result
             
         except Exception as e:
-            self.logger.error(f"❌ Analysis error for {symbol} [{self.config.name}]: {e}")
+            logger.error(f"❌ Analysis error for {symbol} [{self.config.name}]: {e}")
             return None
     
     async def get_market_data(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
@@ -2122,7 +2123,7 @@ class BaseStrategy:
             return None
             
         except Exception as e:
-            self.logger.error(f"Error getting market data for {symbol}: {e}")
+            logger.error(f"Error getting market data for {symbol}: {e}")
             return None
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -2181,7 +2182,7 @@ class BaseStrategy:
             return round(position_size, 6)
             
         except Exception as e:
-            self.logger.error(f"Error calculating position size: {e}")
+            logger.error(f"Error calculating position size: {e}")
             # Ultimate fallback
             return self.config.position_value / entry_price
     
@@ -2216,7 +2217,7 @@ class BaseStrategy:
                            f"PnL: ${pnl:.2f} | Daily: ${self.daily_pnl:.2f}")
             
         except Exception as e:
-            self.logger.error(f"Error recording trade result: {e}")
+            logger.error(f"Error recording trade result: {e}")
     
     def get_strategy_info(self) -> Dict:
         """Get comprehensive strategy performance info"""
@@ -2360,7 +2361,7 @@ class RSIStrategy(BaseStrategy):
             return rsi
             
         except Exception as e:
-            self.logger.error(f"RSI calculation error: {e}")
+            logger.error(f"RSI calculation error: {e}")
             return pd.Series([50] * len(prices))
     
     def calculate_volume_confirmation(self, df: pd.DataFrame) -> Dict:
@@ -2385,7 +2386,7 @@ class RSIStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Volume calculation error: {e}")
+            logger.error(f"Volume calculation error: {e}")
             return {'volume_surge': False, 'volume_ratio_recent': 1.0}
     
     def calculate_price_momentum(self, df: pd.DataFrame) -> Dict:
@@ -2419,7 +2420,7 @@ class RSIStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Price momentum calculation error: {e}")
+            logger.error(f"Price momentum calculation error: {e}")
             return {'bullish_momentum': False, 'bearish_momentum': False}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -2534,7 +2535,7 @@ class RSIStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            self.logger.error(f"❌ RSI signal generation error: {e}")
+            logger.error(f"❌ RSI signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -2606,7 +2607,7 @@ class EMAStrategy(BaseStrategy):
         try:
             return prices.ewm(span=period, adjust=False).mean()
         except Exception as e:
-            self.logger.error(f"EMA calculation error: {e}")
+            logger.error(f"EMA calculation error: {e}")
             return prices.rolling(window=period).mean()  # Fallback to SMA
     
     def calculate_trend_strength(self, df: pd.DataFrame, ema_fast: pd.Series, ema_slow: pd.Series) -> Dict:
@@ -2621,7 +2622,7 @@ class EMAStrategy(BaseStrategy):
             bullish_alignments = 0
             bearish_alignments = 0
             
-            for i in range(len(recent_candles)):
+            for i in range(int(len(recent_candles))):
                 price = recent_candles.iloc[i]['close']
                 fast = ema_fast_recent.iloc[i]
                 slow = ema_slow_recent.iloc[i]
@@ -2651,7 +2652,7 @@ class EMAStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Trend strength calculation error: {e}")
+            logger.error(f"Trend strength calculation error: {e}")
             return {'bullish_persistence': 0, 'bearish_persistence': 0}
     
     def calculate_volume_profile(self, df: pd.DataFrame) -> Dict:
@@ -2684,7 +2685,7 @@ class EMAStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Volume profile calculation error: {e}")
+            logger.error(f"Volume profile calculation error: {e}")
             return {'volume_surge': False, 'volume_ratio': 1.0}
     
     def detect_false_breakout_risk(self, df: pd.DataFrame, ema_fast: pd.Series, ema_slow: pd.Series) -> Dict:
@@ -2697,7 +2698,7 @@ class EMAStrategy(BaseStrategy):
             
             # Count crossovers in recent periods
             crossover_count = 0
-            for i in range(1, len(recent_ema_fast)):
+            for i in range(1, int(len(recent_ema_fast))):
                 if ((recent_ema_fast.iloc[i-1] <= recent_ema_slow.iloc[i-1] and 
                      recent_ema_fast.iloc[i] > recent_ema_slow.iloc[i]) or
                     (recent_ema_fast.iloc[i-1] >= recent_ema_slow.iloc[i-1] and 
@@ -2731,7 +2732,7 @@ class EMAStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"False breakout detection error: {e}")
+            logger.error(f"False breakout detection error: {e}")
             return {'false_breakout_risk': False}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -2863,7 +2864,7 @@ class EMAStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            self.logger.error(f"❌ EMA signal generation error: {e}")
+            logger.error(f"❌ EMA signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -2972,7 +2973,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Multi-timeframe momentum calculation error: {e}")
+            logger.error(f"Multi-timeframe momentum calculation error: {e}")
             return {'strong_momentum': False, 'avg_momentum': 0}
     
     def calculate_volume_profile_scalping(self, df: pd.DataFrame) -> Dict:
@@ -3025,7 +3026,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Volume profile calculation error: {e}")
+            logger.error(f"Volume profile calculation error: {e}")
             return {'volume_surge': False, 'volume_ratio_avg': 1.0}
     
     def calculate_price_action_scalping(self, df: pd.DataFrame) -> Dict:
@@ -3076,7 +3077,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Price action analysis error: {e}")
+            logger.error(f"Price action analysis error: {e}")
             return {'momentum_candle': False, 'direction_consistency': 0.5}
     
     def calculate_market_liquidity(self, df: pd.DataFrame) -> Dict:
@@ -3090,7 +3091,7 @@ class ScalpingStrategy(BaseStrategy):
             recent_data = df.tail(10)
             volume_weighted_price_change = 0
             
-            for i in range(1, len(recent_data)):
+            for i in range(1, int(len(recent_data))):
                 price_change = abs(recent_data.iloc[i]['close'] - recent_data.iloc[i-1]['close'])
                 volume = recent_data.iloc[i]['volume']
                 if volume > 0:
@@ -3108,7 +3109,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Liquidity calculation error: {e}")
+            logger.error(f"Liquidity calculation error: {e}")
             return {'liquidity_adequate': True, 'liquidity_score': 1.0}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -3231,7 +3232,7 @@ class ScalpingStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            self.logger.error(f"❌ Ultra scalping signal generation error: {e}")
+            logger.error(f"❌ Ultra scalping signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def should_quick_exit(self, entry_price: float, current_price: float, side: str) -> Tuple[bool, str]:
@@ -3254,7 +3255,7 @@ class ScalpingStrategy(BaseStrategy):
             return False, ""
             
         except Exception as e:
-            self.logger.error(f"Quick exit calculation error: {e}")
+            logger.error(f"Quick exit calculation error: {e}")
             return False, ""
     
     def get_strategy_specific_info(self) -> Dict:
@@ -3350,7 +3351,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"MACD calculation error: {e}")
+            logger.error(f"MACD calculation error: {e}")
             # Return neutral values
             neutral_series = pd.Series([0] * len(prices))
             return {
@@ -3376,7 +3377,7 @@ class MACDStrategy(BaseStrategy):
             macd_lows = []
             
             # Simple peak/trough detection
-            for i in range(2, len(recent_prices) - 2):
+            for i in range(2, int(len(recent_prices) - 2)):
                 # Price and MACD highs
                 if (recent_prices.iloc[i] > recent_prices.iloc[i-1] and 
                     recent_prices.iloc[i] > recent_prices.iloc[i+1] and
@@ -3424,7 +3425,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Divergence detection error: {e}")
+            logger.error(f"Divergence detection error: {e}")
             return {'bullish_divergence': False, 'bearish_divergence': False, 'divergence_strength': 0}
     
     def calculate_momentum_persistence(self, macd_data: Dict) -> Dict:
@@ -3443,7 +3444,7 @@ class MACDStrategy(BaseStrategy):
             bearish_persistence = bearish_periods / len(recent_histogram)
             
             # MACD line momentum
-            macd_above_signal = sum(1 for i in range(len(recent_macd)) 
+            macd_above_signal = sum(1 for i in range(int(len(recent_macd))) 
                                   if recent_macd.iloc[i] > recent_signal.iloc[i])
             macd_momentum_bullish = macd_above_signal / len(recent_macd)
             
@@ -3472,7 +3473,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Momentum persistence calculation error: {e}")
+            logger.error(f"Momentum persistence calculation error: {e}")
             return {'momentum_consistent': False, 'bullish_persistence': 0.5}
     
     def calculate_trend_context(self, df: pd.DataFrame, macd_data: Dict) -> Dict:
@@ -3493,8 +3494,8 @@ class MACDStrategy(BaseStrategy):
                 n = len(x)
                 sum_x = sum(x)
                 sum_y = sum(y)
-                sum_xy = sum(x[i] * y[i] for i in range(n))
-                sum_x2 = sum(x[i] ** 2 for i in range(n))
+                sum_xy = sum(x[i] * y[i] for i in range(int(n)))
+                sum_x2 = sum(x[i] ** 2 for i in range(int(n)))
                 
                 slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
                 trend_strength = abs(slope) / trend_end * 100  # Normalize
@@ -3524,7 +3525,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Trend context calculation error: {e}")
+            logger.error(f"Trend context calculation error: {e}")
             return {'overall_trend': 0, 'macd_trend_alignment': False}
     
     def calculate_volume_momentum(self, df: pd.DataFrame) -> Dict:
@@ -3566,7 +3567,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Volume momentum calculation error: {e}")
+            logger.error(f"Volume momentum calculation error: {e}")
             return {'volume_confirmation': False, 'volume_ratio': 1.0}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -3699,7 +3700,7 @@ class MACDStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            self.logger.error(f"❌ MACD momentum signal generation error: {e}")
+            logger.error(f"❌ MACD momentum signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -3803,7 +3804,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Bollinger Bands calculation error: {e}")
+            logger.error(f"Bollinger Bands calculation error: {e}")
             # Return neutral bands
             return {
                 'upper': prices * 1.02,
@@ -3863,7 +3864,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Consolidation detection error: {e}")
+            logger.error(f"Consolidation detection error: {e}")
             return {'is_consolidating': False, 'strong_consolidation': False}
     
     def detect_support_resistance_levels(self, df: pd.DataFrame) -> Dict:
@@ -3876,7 +3877,7 @@ class BreakoutStrategy(BaseStrategy):
             highs = []
             lows = []
             
-            for i in range(2, len(recent_data) - 2):
+            for i in range(2, int(len(recent_data) - 2)):
                 current_high = recent_data.iloc[i]['high']
                 current_low = recent_data.iloc[i]['low']
                 
@@ -3918,7 +3919,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Support/Resistance detection error: {e}")
+            logger.error(f"Support/Resistance detection error: {e}")
             current_price = df['close'].iloc[-1]
             return {
                 'nearest_resistance': current_price * 1.05,
@@ -4006,7 +4007,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"Breakout quality calculation error: {e}")
+            logger.error(f"Breakout quality calculation error: {e}")
             return {'breakout_type': 'none', 'quality_score': 0}
     
     def calculate_atr(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -4026,7 +4027,7 @@ class BreakoutStrategy(BaseStrategy):
             return atr
             
         except Exception as e:
-            self.logger.error(f"ATR calculation error: {e}")
+            logger.error(f"ATR calculation error: {e}")
             return pd.Series([df['close'].iloc[-1] * 0.02] * len(df))  # 2% fallback
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -4155,7 +4156,7 @@ class BreakoutStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            self.logger.error(f"❌ Breakout signal generation error: {e}")
+            logger.error(f"❌ Breakout signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -4277,7 +4278,7 @@ class VolumeSpikeStrategy(BaseStrategy):
             return "Hold", 0.0, {}
             
         except Exception as e:
-            self.logger.error(f"❌ HFQ-Lite Volume Spike error: {e}")
+            logger.error(f"❌ HFQ-Lite Volume Spike error: {e}")
             return "Hold", 0.0, {}
     
     def _quick_volume_check(self, df: pd.DataFrame) -> bool:
@@ -4393,7 +4394,7 @@ class VolumeSpikeStrategy(BaseStrategy):
         total_buy_volume = 0
         total_sell_volume = 0
         
-        for i in range(1, len(recent_data)):
+        for i in range(1, int(len(recent_data))):
             price_change = recent_data['close'].iloc[i] - recent_data['close'].iloc[i-1]
             volume = recent_data['volume'].iloc[i]
             
@@ -4810,7 +4811,7 @@ class BollingerBandsStrategy(BaseStrategy):
             return "Hold", 0.0, {}
             
         except Exception as e:
-            self.logger.error(f"❌ HFQ-Lite Bollinger Bands error: {e}")
+            logger.error(f"❌ HFQ-Lite Bollinger Bands error: {e}")
             return "Hold", 0.0, {}
     
     def _quick_bb_check(self, df: pd.DataFrame) -> bool:
@@ -5537,7 +5538,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return final_signal, final_strength, analysis
             
         except Exception as e:
-            self.logger.error(f"❌ HFQ Elite Hybrid Composite error: {e}")
+            logger.error(f"❌ HFQ Elite Hybrid Composite error: {e}")
             return "Hold", 0.0, {}
     
     def _quick_market_check(self, df: pd.DataFrame) -> bool:
@@ -5591,7 +5592,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return indicators
             
         except Exception as e:
-            self.logger.error(f"❌ Indicator calculation error: {e}")
+            logger.error(f"❌ Indicator calculation error: {e}")
             return {}
     
     def _generate_individual_signals(self, indicators: Dict, df: pd.DataFrame) -> Dict:
@@ -5697,7 +5698,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return signals
             
         except Exception as e:
-            self.logger.error(f"❌ Individual signal generation error: {e}")
+            logger.error(f"❌ Individual signal generation error: {e}")
             return {}
     
     def _calculate_composite_signal(self, individual_signals: Dict) -> Tuple[str, float]:
@@ -5747,7 +5748,7 @@ class HybridCompositeStrategy(BaseStrategy):
                 return "Hold", max(buy_score, sell_score)
                 
         except Exception as e:
-            self.logger.error(f"❌ Composite signal calculation error: {e}")
+            logger.error(f"❌ Composite signal calculation error: {e}")
             return "Hold", 0.0
     
     def _assess_signal_quality(self, individual_signals: Dict, indicators: Dict, df: pd.DataFrame) -> float:
@@ -5790,7 +5791,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return sum(quality_factors) / len(quality_factors)
             
         except Exception as e:
-            self.logger.error(f"❌ Quality assessment error: {e}")
+            logger.error(f"❌ Quality assessment error: {e}")
             return 0.5
     
     def _apply_regime_adjustment(self, signal_strength: float, indicators: Dict, df: pd.DataFrame) -> float:
@@ -5820,7 +5821,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return min(1.0, signal_strength * adjustment)
             
         except Exception as e:
-            self.logger.error(f"❌ Regime adjustment error: {e}")
+            logger.error(f"❌ Regime adjustment error: {e}")
             return signal_strength
     
     def _make_final_decision(self, signal: str, strength: float, quality: float) -> Tuple[str, float]:
@@ -5851,7 +5852,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return signal, final_strength
             
         except Exception as e:
-            self.logger.error(f"❌ Final decision error: {e}")
+            logger.error(f"❌ Final decision error: {e}")
             return "Hold", 0.0
     
     def should_enter_trade(self, symbol: str, signal_data: Dict) -> bool:
@@ -5882,7 +5883,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return agreement_count >= 2  # Reduced from 3 to 2 for HFQ
             
         except Exception as e:
-            self.logger.error(f"❌ Trade entry decision error: {e}")
+            logger.error(f"❌ Trade entry decision error: {e}")
             return False
     
     def calculate_position_size(self, symbol: str, signal_data: Dict) -> float:
@@ -5900,7 +5901,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return base_size * composite_multiplier
             
         except Exception as e:
-            self.logger.error(f"❌ Position size calculation error: {e}")
+            logger.error(f"❌ Position size calculation error: {e}")
             return 0.0
     
     def get_hfq_composite_status(self) -> Dict:
@@ -5931,7 +5932,7 @@ class HybridCompositeStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            self.logger.error(f"❌ Status generation error: {e}")
+            logger.error(f"❌ Status generation error: {e}")
             return {}
 # =====================================
 # REGIME ADAPTIVE AI DIRECTOR
@@ -6784,16 +6785,15 @@ class AccountManager:
                 category="linear",
                 symbol=symbol
             )
-
             result = info["result"]["list"][0]
             qty_step = float(result["lotSizeFilter"]["qtyStep"])
             tick_size = float(result["priceFilter"]["tickSize"])
-            precision = (qty_step, tick_size)
+            qty_precision = int(abs(Decimal(str(qty_step)).as_tuple().exponent))
+            precision = (qty_precision, qty_step)
             setattr(self, cache_key, precision)
             return precision
-
         except Exception as e:
-            self.logger.error(f"Precision fetch failed for {symbol}: {e}")
+            logger.error(f"Precision fetch failed for {symbol}: {e}")
             raise
 
 # =====================================
@@ -7643,7 +7643,10 @@ class HFQAccountManager:
             try:
                 info = self.exchange.get_symbol_info(symbol)
                 qty_step = float(info["result"]["list"][0]["lotSizeFilter"]["qtyStep"])
-                precision = int(abs(Decimal(str(qty_step)).as_tuple().exponent))
+                try:
+                    precision = 3  # Fixed precision
+                except (ValueError, TypeError, AttributeError):
+                    precision = 6
                 qty = round(qty, precision)
             except Exception as e:
                 self.logger.warning(f"⚠️ Precision fallback triggered: {e}")
@@ -7656,7 +7659,7 @@ class HFQAccountManager:
             return max(qty, 0.001)
 
         except Exception as e:
-            self.logger.error(f"Position sizing error: {e}")
+            logger.error(f"Position sizing error: {e}")
             return 0
     
     def check_sufficient_balance(self, position_value, leverage=10):
@@ -7733,12 +7736,11 @@ class HFQAccountManager:
             result = info["result"]["list"][0]
             qty_step = float(result["lotSizeFilter"]["qtyStep"])
             tick_size = float(result["priceFilter"]["tickSize"])
-            precision = (qty_step, tick_size)
+            qty_precision = int(abs(Decimal(str(qty_step)).as_tuple().exponent))
+            precision = (qty_precision, qty_step)
             setattr(self, cache_key, precision)
             return precision
-
-        except Exception as e:
-            self.logger.error(f"Precision fetch failed for {symbol}: {e}")
+            logger.error(f"Precision fetch failed for {symbol}: {e}")
             raise
  
 # =====================================
@@ -8733,7 +8735,7 @@ def run_strategy_test():
     })
     
     # Ensure OHLC logic (high >= max(open,close), low <= min(open,close))
-    for i in range(len(sample_data)):
+    for i in range(int(len(sample_data))):
         open_price = sample_data.loc[i, 'open']
         close_price = sample_data.loc[i, 'close']
         sample_data.loc[i, 'high'] = max(sample_data.loc[i, 'high'], max(open_price, close_price))
