@@ -6788,7 +6788,7 @@ class AccountManager:
             result = info["result"]["list"][0]
             qty_step = float(result["lotSizeFilter"]["qtyStep"])
             tick_size = float(result["priceFilter"]["tickSize"])
-            qty_precision = int(abs(Decimal(str(qty_step)).as_tuple().exponent))
+            qty_precision = 3  # Fixed precision
             precision = (qty_precision, qty_step)
             setattr(self, cache_key, precision)
             return precision
@@ -7227,13 +7227,14 @@ def calculate_portfolio_risk(self):
 # account_manager = EnhancedAccountManager(bybit_session, config)
 
 class OrderManager:
-    def __init__(self, session, account_manager):
+    def __init__(self, session, account_manager, trailing_manager=None):
         self.session = session
         self.bybit_session = bybit_session
         self.account_manager = account_manager
         self.precision_cache = {}
         self.order_history = deque(maxlen=2000)  # Increased for multi-strategy
         self.last_trade_time = defaultdict(int)
+        self.trailing_manager = trailing_manager
         
     def get_current_price(self, symbol: str) -> Optional[float]:
         """Get current market price with enhanced error handling"""
@@ -7736,7 +7737,7 @@ class HFQAccountManager:
             result = info["result"]["list"][0]
             qty_step = float(result["lotSizeFilter"]["qtyStep"])
             tick_size = float(result["priceFilter"]["tickSize"])
-            qty_precision = int(abs(Decimal(str(qty_step)).as_tuple().exponent))
+            qty_precision = 3  # Fixed precision
             precision = (qty_precision, qty_step)
             setattr(self, cache_key, precision)
             return precision
@@ -8145,8 +8146,8 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
             
             # First, manage trailing stops for all positions
-            self.self.trailing_manager.manage_all_trailing_stops(positions)
-            self.self.trailing_manager.cleanup_closed_positions(positions)
+            self.trailing_manager.manage_all_trailing_stops(positions)
+            self.trailing_manager.cleanup_closed_positions(positions)
             
             # Group positions by strategy for better reporting
             positions_by_strategy = defaultdict(list)
@@ -8198,7 +8199,7 @@ class EnhancedMultiStrategyTradingBot:
                             logger.info(f"📈 [{strategy_name}] PROFIT TARGET HIT for {symbol}: ${unrealized_pnl:.2f}")
                             
                             # Check if trailing is active
-                            tracking = self.self.trailing_manager.position_tracking.get(symbol, {})
+                            tracking = self.trailing_manager.position_tracking.get(symbol, {})
                             is_trailing = tracking.get('trailing_active', False)
                             
                             if not is_trailing:
@@ -8307,7 +8308,7 @@ class EnhancedMultiStrategyTradingBot:
                         risk_level = "🚨" if pos["pnl"] <= -config.max_loss_per_trade * 0.8 else ""
                         
                         # Check trailing status
-                        tracking = self.self.trailing_manager.position_tracking.get(pos['symbol'], {})
+                        tracking = self.trailing_manager.position_tracking.get(pos['symbol'], {})
                         trailing_status = "🎯" if tracking.get('trailing_active', False) else "💰"
                         
                         logger.info(f"      {pnl_indicator}{risk_level}{trailing_status} {pos['symbol']}: {pos['side']} {pos['qty']} | "
@@ -8315,7 +8316,7 @@ class EnhancedMultiStrategyTradingBot:
                                   f"P&L: ${pos['pnl']:+.2f} ({pos['pnl_pct']:+.2f}%)")
             
             # Trailing Stop Summary
-            active_trailing = sum(1 for t in self.self.trailing_manager.position_tracking.values() 
+            active_trailing = sum(1 for t in self.trailing_manager.position_tracking.values() 
                                 if t.get('trailing_active', False))
             logger.info(f"\n🎯 TRAILING STOPS: {active_trailing}/{len(positions)} positions active")
             
@@ -8521,8 +8522,8 @@ class EnhancedMultiStrategyTradingBot:
                 },
                 'strategy_performance': strategy_performance,
                 'trailing_stops': {
-                    'total_positions_tracked': len(self.self.trailing_manager.position_tracking),
-                    'active_trailing_stops': sum(1 for t in self.self.trailing_manager.position_tracking.values() 
+                    'total_positions_tracked': len(self.trailing_manager.position_tracking),
+                    'active_trailing_stops': sum(1 for t in self.trailing_manager.position_tracking.values() 
                                                 if t.get('trailing_active', False)),
                     'strategy_configs': {k: {
                         'initial_stop_pct': v.initial_stop_pct,
@@ -8687,6 +8688,11 @@ if __name__ == "__main__":
         
         # Initialize and run the enhanced multi-strategy bot
 
+        # Initialize trailing manager
+        logger.info("🔧 Initializing trailing manager...")
+        trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
+        logger.info("✅ Trailing manager ready")
+
         # Initialize AccountManager
         logger.info("🤖 Initializing AccountManager...")
         account_manager = EnhancedAccountManager(session)
@@ -8694,7 +8700,7 @@ if __name__ == "__main__":
 
         # Initialize OrderManager
         logger.info("🔧 Initializing OrderManager...")
-        order_manager = OrderManager(session, account_manager)
+        order_manager = OrderManager(session, account_manager, trailing_manager)
         logger.info("✅ OrderManager ready")
 
         bot = EnhancedMultiStrategyTradingBot()
