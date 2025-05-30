@@ -1819,7 +1819,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
     StrategyType.RSI_SCALP: StrategyConfig(
             name="RSI_Scalp_Fast",
             max_positions=3,
-            position_value=0,
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
             position_sizing_method="risk_based",
             risk_per_trade_pct=1.5,
             min_confidence=0.75,
@@ -1835,7 +1835,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         StrategyType.EMA_CROSS: StrategyConfig(
         name="EMA_Cross_Swing",
         max_positions=2,
-        position_value=0,                            # ✅ Use dynamic risk sizing
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                            # ✅ Use dynamic risk sizing
         position_sizing_method="risk_based",         # ✅ Enable HFQ sizing
         risk_per_trade_pct=1.5,                      # ✅ 1.5% of balance per trade
         min_confidence=0.65,
@@ -1851,7 +1851,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         StrategyType.SCALPING: StrategyConfig(
         name="Ultra_Scalp",
             max_positions=4,
-            position_value=0,                            # ✅ Dynamic sizing
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                            # ✅ Dynamic sizing
             position_sizing_method="risk_based",         # ✅ Enables % balance sizing
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
             min_confidence=0.8,
@@ -1868,7 +1868,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
     StrategyType.MACD_MOMENTUM: StrategyConfig(
             name="MACD_Momentum",
             max_positions=2,
-            position_value=0,                            # ✅ Enable dynamic sizing
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                            # ✅ Enable dynamic sizing
         position_sizing_method="risk_based",         # ✅ Use risk-based logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
             min_confidence=0.7,
@@ -1886,7 +1886,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
     StrategyType.RSI_OVERSOLD: StrategyConfig(
             name="RSI_Oversold_Recovery",
             max_positions=3,
-            position_value=0,                            # ✅ Enable dynamic sizing
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                            # ✅ Enable dynamic sizing
             position_sizing_method="risk_based",         # ✅ Risk-based sizing logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% risk per trade
             min_confidence=0.72,
@@ -1903,7 +1903,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
             name="HFQ_Volume_Spike",
             max_positions=1,                   # Higher concurrent positions
-            position_value=0,                  # Max position cap
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                  # Max position cap
             min_confidence=0.70,               # 70% minimum quality
             risk_per_trade=1.5,                # 1.5% risk per trade
             max_daily_trades=150,              # ✅ Your 150 trades/day target
@@ -1932,7 +1932,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         StrategyType.BOLLINGER_BANDS: StrategyConfig(
             name="Bollinger_Squeeze",
             max_positions=1,
-            position_value=220.0,
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
             min_confidence=0.73,
             max_daily_trades=45,
             signal_cache_seconds=30,
@@ -1944,7 +1944,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         StrategyType.MOMENTUM_BREAKOUT: StrategyConfig(
             name="Momentum_Breakout",
             max_positions=1,
-            position_value=300.0,
+            position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
             min_confidence=0.78,
             max_daily_trades=25,
             signal_cache_seconds=40,
@@ -2173,7 +2173,7 @@ class BaseStrategy:
             position_size = max(position_size, min_size)
             
             # Apply maximum position value constraint
-            max_value_size = self.config.position_value / entry_price
+            max_value_size = (available * self.account_manager.config.MAX_POSITION_PCT) / entry_price
             position_size = min(position_size, max_value_size)
             
             self.logger.debug(f"💰 Position size for {symbol}: {position_size:.6f} "
@@ -2184,7 +2184,7 @@ class BaseStrategy:
         except Exception as e:
             self.logger.error(f"Error calculating position size: {e}")
             # Ultimate fallback
-            return self.config.position_value / entry_price
+            return (available * self.account_manager.config.MAX_POSITION_PCT) / entry_price
     
     def record_trade_result(self, symbol: str, entry_price: float, exit_price: float, 
                           side: str, position_size: float, success: bool):
@@ -6125,7 +6125,7 @@ STRATEGY_CONFIGS = {
         name="RSI Quantum Pro",
         enabled=True,
         max_positions=1,                 # ↑ Increased for elite performance
-        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this    
 #         profit_target_pct=2.2,           # ↑ Optimized target
@@ -6146,7 +6146,7 @@ STRATEGY_CONFIGS = {
         name="EMA Neural Elite",
         enabled=True,
         max_positions=1,
-        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=2.8,           # ↑ Higher targets with better timing
@@ -6166,7 +6166,7 @@ STRATEGY_CONFIGS = {
         name="Lightning Scalp Quantum",
         enabled=True,
         max_positions=1,                 # ↑ More positions for scalping
-        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=0.9,           # ↑ Slightly higher with better entries
@@ -6187,7 +6187,7 @@ STRATEGY_CONFIGS = {
         name="MACD Momentum Master",
         enabled=True,
         max_positions=1,
-        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=3.2,           # ↑ Higher momentum targets
@@ -6208,7 +6208,7 @@ STRATEGY_CONFIGS = {
         name="HFQ Volume Spike Elite",
         enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,                 # ↑ More positions for volume opportunities
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=1.8,           # ↑ Higher targets with better detection
@@ -6228,7 +6228,7 @@ STRATEGY_CONFIGS = {
         name="HFQ Bollinger Quantum Pro",
         enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=2.3,           # ↑ Optimized mean reversion targets
@@ -6250,7 +6250,7 @@ STRATEGY_CONFIGS = {
         name="Market Regime AI Director",
         enabled=True,
         max_positions=0,                 # Overlay strategy - adjusts others
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
 #         profit_target_pct=0,
         max_loss_pct=0,
         leverage=1,
@@ -6267,7 +6267,7 @@ STRATEGY_CONFIGS = {
         name="Funding Rate Harvester Pro",
         enabled=True,
         max_positions=1,                 # Dedicated positions for funding
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=0.4,           # Small but consistent
@@ -6286,7 +6286,7 @@ STRATEGY_CONFIGS = {
         name="News Alpha AI Engine",
         enabled=True,
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this
 #         profit_target_pct=1.8,           # Quick profits on news
@@ -6306,7 +6306,7 @@ STRATEGY_CONFIGS = {
         name="Multi-Timeframe Confluence AI",
         enabled=True,
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this        
 #         profit_target_pct=1.8,           # Quick profits on news
@@ -6326,7 +6326,7 @@ STRATEGY_CONFIGS = {
         name="Cross-Asset Momentum AI",
         enabled=True,
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES
 #         profit_target_pct=2.1,
@@ -6348,7 +6348,7 @@ STRATEGY_CONFIGS = {
         name="ML Ensemble Alpha Engine",
         enabled=True,
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES
 #         profit_target_pct=2.5,
@@ -6369,7 +6369,7 @@ STRATEGY_CONFIGS = {
         name="Order Book Alpha Predator",
         enabled=True,                    # Enable for elite performance
         max_positions=1,                 # High frequency opportunities
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES       
 #         profit_target_pct=0.6,           # Quick scalp profits
@@ -6389,7 +6389,7 @@ STRATEGY_CONFIGS = {
         name="Cross-Exchange Arbitrage Master",
         enabled=True,
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES             
 #         profit_target_pct=0.3,                # Small but risk-free profits
@@ -6411,7 +6411,7 @@ STRATEGY_CONFIGS = {
         name="Volatility Breakout Beast",
         enabled=False,                   # ← Keep disabled for now (can enable later)
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
 #         profit_target_pct=2.5,           # ↑ Higher target for breakouts
         max_loss_pct=1.2,                # ↑ Slightly wider stop for volatility
         leverage=5,                      # ↓ Lower leverage for volatility
@@ -6426,7 +6426,7 @@ STRATEGY_CONFIGS = {
         name="Hybrid Composite Master",
         enabled=False,                   # ← Keep disabled (complex strategy)
         max_positions=1,
-        position_value=0,
+        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
 #         profit_target_pct=2.5,
         max_loss_pct=1.0,
         leverage=7,
@@ -7356,7 +7356,22 @@ class OrderManager:
                 
                 position_value = qty * current_price
                 
-                if not self.account_manager.check_sufficient_balance(500):
+                # POSITION SIZE PERCENTAGE VALIDATION
+                account_balance = self.account_manager.get_account_balance()['available']
+                position_pct = (position_value / account_balance) * 100
+                
+                # Validate position size
+                if position_pct > 10:  # Hard limit at 10%
+                    logger.error(f"❌ REJECTED: {symbol} would be {position_pct:.1f}% of account!")
+                    logger.error(f"   Position: ${position_value:.2f} | Balance: ${account_balance:.2f}")
+                    return None
+                
+                if position_pct > 8:  # Warning above 8%
+                    logger.warning(f"⚠️ Large position: {symbol} is {position_pct:.1f}% of account")
+                
+                logger.info(f"✅ Position check: {symbol} is {position_pct:.1f}% of account")
+                
+                if not self.account_manager.check_sufficient_balance(position_value):
                     logger.error(f"❌ Insufficient balance for {symbol} trade")
                     return None
                 
