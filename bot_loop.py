@@ -1,4 +1,5 @@
 
+
 # =====================================
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
@@ -294,7 +295,7 @@ class TradingConfig:
     # ADD THIS METHOD HERE ✅
     def validate_position_sizing(self):
         """Ensure dynamic sizing is working correctly"""
-        logger.info("🔍 Validating position sizing configuration...")
+        logger.info("�� Validating position sizing configuration...")
         
         # Check position sizing method
         if self.position_sizing_method != "risk_based":
@@ -950,7 +951,7 @@ class TechnicalAnalysis:
 
 # Initialize Technical Analysis Engine
 ta_engine = TechnicalAnalysis(session)
-logger.info("📊 Technical Analysis Engine initialized for HF trading")
+logger.info("�� Technical Analysis Engine initialized for HF trading")
 
 # =====================================
 # ENHANCED TRAILING STOP LOSS SYSTEM
@@ -1717,7 +1718,7 @@ class EliteStrategyConfig(StrategyConfig):
                  max_var_95: float = 0.015,            # ↓ Lower VaR for safety
                  daily_trade_limit: int = 200,         # ↑ High frequency limit
                  
-                 # 🔄 REAL-TIME ADAPTATION
+                 # �� REAL-TIME ADAPTATION
                  auto_parameter_tuning: bool = True,    # ⭐ Self-optimizing parameters
                  performance_feedback: bool = True,     # Real-time performance adjustment
                  regime_weight_adjustment: bool = True, # Dynamic strategy weighting
@@ -4674,7 +4675,7 @@ class VolumeSpikeStrategy(BaseStrategy):
         }
         self.opportunity_pool.clear()
         
-        self.logger.info("🔄 HFQ-Lite Volume Spike daily counters reset")
+        self.logger.info("�� HFQ-Lite Volume Spike daily counters reset")
     
     def get_strategy_specific_info(self) -> Dict:
         """Get HFQ-Lite specific strategy information"""
@@ -7962,7 +7963,7 @@ class EnhancedMultiStrategyTradingBot:
             
             balance_info = self.account_manager.get_account_balance()
             if balance_info['available'] < config.min_required_balance * 0.4:
-                logger.error(f"🚨 EMERGENCY STOP: Critical balance level: ${balance_info['available']:.2f}")
+                logger.error(f"�� EMERGENCY STOP: Critical balance level: ${balance_info['available']:.2f}")
                 return True
             
             return False
@@ -8187,7 +8188,8 @@ class EnhancedMultiStrategyTradingBot:
                             continue
                         
                         # Regular max loss check
-                        if unrealized_pnl <= -config.max_loss_per_trade:
+                        max_loss = available_balance * 0.015
+                        if unrealized_pnl <= -max_loss:
                             logger.warning(f"🛑 [{strategy_name}] MAX LOSS HIT for {symbol}: ${unrealized_pnl:.2f}")
                             if self.order_manager.close_position(symbol, side, qty, strategy_name):
                                 self.daily_realized_pnl += unrealized_pnl
@@ -8301,7 +8303,7 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"   Total Open Positions: {len(positions)}/{config.max_concurrent_trades}")
             
             if positions:
-                logger.info(f"\n📍 ACTIVE POSITIONS BY STRATEGY:")
+                logger.info(f"\n�� ACTIVE POSITIONS BY STRATEGY:")
                 for strategy_name, strategy_positions in positions_by_strategy.items():
                     strategy_total_pnl = sum(pos['pnl'] for pos in strategy_positions)
                     logger.info(f"   [{strategy_name}] Total P&L: ${strategy_total_pnl:+.2f}")
@@ -8408,7 +8410,7 @@ class EnhancedMultiStrategyTradingBot:
                 
                 scan_count += 1
                 logger.info(f"\n{'='*80}")
-                logger.info(f"🔄 MULTI-STRATEGY SCAN #{scan_count} - {datetime.now().strftime('%H:%M:%S')}")
+                logger.info(f"�� MULTI-STRATEGY SCAN #{scan_count} - {datetime.now().strftime('%H:%M:%S')}")
                 logger.info(f"{'='*80}")
                 
                 # Phase 1: Critical Position Management with Trailing Stops (Priority)
@@ -8926,3 +8928,4 @@ logger.info(f"   Safety Features: {len(BOT_METADATA['safety_features'])}")
 # Features: Complete Multi-Strategy System with Trailing Stops
 # Safety: Professional Risk Management
 # =====================================
+
