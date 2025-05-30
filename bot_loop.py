@@ -8081,7 +8081,7 @@ class EnhancedMultiStrategyTradingBot:
                 time_quality = "MODERATE"
             else:
                 # Off hours - only exceptional signals
-                min_strength = 0.85
+                min_strength = 0.80
                 time_quality = "OFF-PEAK"
             
             # Log time-based decision
