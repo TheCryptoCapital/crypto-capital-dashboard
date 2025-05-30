@@ -6153,7 +6153,7 @@ STRATEGY_CONFIGS = {
         max_loss_pct=0.9,               # 1% stop loss distance
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
-        timeframe="8",                   # ↑ Optimized 8-minute sweet spot
+        timeframe="5",                   # ↑ Optimized 8-minute sweet spot
         min_signal_strength=0.05,
         regime_adaptive=True,
         ml_filter=True,
@@ -6274,7 +6274,7 @@ STRATEGY_CONFIGS = {
         max_loss_pct=0.15,              # Very tight stops
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
-        timeframe="1h",
+        timeframe="60",
         min_signal_strength=0.05,        # Extremely high confidence
         funding_aware=True,
         cross_asset_correlation=True,
@@ -6376,7 +6376,7 @@ STRATEGY_CONFIGS = {
         max_loss_pct=0.25,               # Very tight stops
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
-        timeframe="1s",                  # Sub-minute execution
+        timeframe="1",                  # Sub-minute execution
         min_signal_strength=0.05,
         microstructure_boost=True,
         latency_critical=True,
@@ -6862,7 +6862,8 @@ class EnhancedAccountManager(AccountManager):
         self._update_daily_loss_limit()
         logger.info("📅 Daily loss tracking reset")
         logger.info(f"   New daily loss limit: ${self.daily_loss_limit:.2f}")
-        def calculate_position_size_safe(self, symbol: str, entry_price: float, 
+       
+    def calculate_position_size_safe(self, symbol: str, entry_price: float, 
                                    stop_loss: float, risk_amount: Optional[float] = None, 
                                    strategy_name: str = "Unknown") -> float:
         """
@@ -7290,20 +7291,24 @@ def calculate_portfolio_risk(self):
 class OrderManager:
 
     def validate_position_size(self, symbol: str, qty: float, price: float) -> bool:
-            """Final safety validation before placing order"""
+        """Final safety validation before placing order"""
+        try: 
             balance = self.account_manager.get_account_balance()['available']
             position_value = qty * price
             position_pct = (position_value / balance) * 100
         
             # Hard limits
             if position_pct > 20:  # Never more than 20% in one position
-            logger.error(f"❌ REJECTED: {symbol} position is {position_pct:.1f}% of account!")
+                logger.error(f"❌ REJECTED: {symbol} position is {position_pct:.1f}% of account!")
+                return False
+        
+            if position_value > balance * 0.15:  # Warn if over 15%
+                logger.warning(f"⚠️ Large position: {symbol} is {position_pct:.1f}% of account")
+        
+            return True
+        except Exception as e:
+            logger.error(f"Position validation error: {e}")
             return False
-        
-        if position_value > balance * 0.15:  # Warn if over 15%
-            logger.warning(f"⚠️ Large position: {symbol} is {position_pct:.1f}% of account")
-        
-        return True
 
     def __init__(self, session, account_manager):
         self.session = session
@@ -7700,7 +7705,7 @@ class HFQAccountManager:
             logger.error(f"❌ Error getting positions: {e}")
             return []
     
-        def calculate_position_size_safe(self, symbol: str, entry_price: float, 
+    def calculate_position_size_safe(self, symbol: str, entry_price: float, 
                                    stop_loss: float, risk_amount: Optional[float] = None, 
                                    strategy_name: str = "Unknown") -> float:
         """
@@ -7766,25 +7771,8 @@ class HFQAccountManager:
             
         except Exception as e:
             logger.error(f"❌ Position sizing error for {symbol}: {e}")
-            return 0            if risk_amount is None:
-                risk_amount = available * 0.015  # 1.5% risk
-            
-            risk_per_unit = abs(entry_price - stop_loss)
-            if risk_per_unit <= 0:
-                return 0
-            
-            qty = risk_amount / risk_per_unit
-            
-            position_value = qty * entry_price
-            if position_value > available * 0.15:
-                qty = (available * 0.15) / entry_price
-            
-            return max(qty, 0.001)
-            
-        except Exception as e:
-            logger.error(f"Position sizing error: {e}")
             return 0
-    
+            
     def check_sufficient_balance(self, position_value, leverage=10):
         """Check if sufficient balance for position"""
         try:
