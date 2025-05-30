@@ -6776,9 +6776,9 @@ class AccountManager:
     def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
         """Get symbol precision with caching"""
         try:
-            cachekey = f"precision{symbol}"
-            if hasattr(self, f"precision_{symbol}"):
-                return getattr(self, f"precision_{symbol}")
+            cache_key = f"precision_{symbol}"
+            if hasattr(self, cache_key):
+                return getattr(self, cache_key)
 
             info = self.bybit_session.get_instruments_info(
                 category="linear",
@@ -8153,6 +8153,10 @@ class EnhancedMultiStrategyTradingBot:
                 logger.warning("⚠️ Insufficient balance - skipping entry scan")
                 return
             
+            # Get account balance for calculations
+            balance_info = self.account_manager.get_account_balance()
+            available_balance = balance_info['available']
+            
             positions = self.account_manager.get_open_positions()
             
             # Calculate positions per strategy
@@ -8264,6 +8268,11 @@ class EnhancedMultiStrategyTradingBot:
                         continue
                     
                     # Calculate final stop loss and take profit
+                    # Ensure available_balance is defined
+                    if 'available_balance' not in locals():
+                        balance_info = self.account_manager.get_account_balance()
+                        available_balance = balance_info['available']
+                    
                     final_stop_loss = self.order_manager.calculate_safe_stop_loss(
                         symbol, current_price, side, (available_balance * (getattr(config, "max_loss_pct", 1.5) / 100)), qty, strategy_name
                     )
@@ -8369,6 +8378,10 @@ class EnhancedMultiStrategyTradingBot:
                             continue
                         
                         # Regular max loss check
+                        # Get balance for max loss calculation
+                        balance_info = self.account_manager.get_account_balance()
+                        available_balance = balance_info["available"]
+                        
                         max_loss = available_balance * 0.015
                         if unrealized_pnl <= -max_loss:
                             logger.warning(f"🛑 [{strategy_name}] MAX LOSS HIT for {symbol}: ${unrealized_pnl:.2f}")
