@@ -17,7 +17,7 @@ import json
 import requests
 import threading
 import numpy as np
-from datetime import datetime, timedelta  # ✅ Keep this one
+from datetime import datetime, timedelta, timezone  # ✅ Keep this one
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 from typing import Dict, List, Optional, Tuple, Any  # ✅ Fixed: Optional not "Optiona"
@@ -8047,6 +8047,58 @@ class EnhancedMultiStrategyTradingBot:
         self.last_heartbeat = datetime.now()
         self.emergency_stop = False
         
+
+    def should_trade_now(self, signal_strength: float = 0.0) -> bool:
+        """
+        Dynamic time-based trading filter
+        Adjusts signal requirements based on market hours
+        """
+        try:
+            current_hour = datetime.now(timezone.utc).hour
+            
+            # Define market sessions and quality requirements
+            # Prime hours: EU/US overlap (best liquidity)
+            prime_hours = [13, 14, 15, 16]  # 13:00-17:00 UTC
+            
+            # Good hours: Active sessions
+            good_hours = list(range(7, 21))  # 07:00-21:00 UTC
+            
+            # Moderate hours: Asian session
+            moderate_hours = [23, 0, 1, 2, 3, 4, 5, 6]
+            
+            # Adjust requirements based on time
+            if current_hour in prime_hours:
+                # Best hours - accept good signals
+                min_strength = 0.65
+                time_quality = "PRIME"
+            elif current_hour in good_hours:
+                # Good hours - standard requirements
+                min_strength = 0.75
+                time_quality = "GOOD"
+            elif current_hour in moderate_hours:
+                # Moderate hours - higher requirements
+                min_strength = 0.80
+                time_quality = "MODERATE"
+            else:
+                # Off hours - only exceptional signals
+                min_strength = 0.85
+                time_quality = "OFF-PEAK"
+            
+            # Log time-based decision
+            if signal_strength > 0:
+                logger.info(f"🕐 Market Hours: {time_quality} (UTC {current_hour}:00) | "
+                          f"Signal: {signal_strength:.2f} | Required: {min_strength:.2f}")
+            
+            # Allow high-quality signals to override time restrictions
+            if signal_strength >= 0.90:
+                logger.info("💎 Exceptional signal overrides time restriction!")
+                return True
+            
+            return signal_strength >= min_strength
+            
+        except Exception as e:
+            logger.error(f"Time filter error: {e}")
+            return True  # Default to allowing trades if error
         # Strategy performance tracking
         self.strategy_stats = defaultdict(lambda: {
             'trades': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0
@@ -8090,6 +8142,12 @@ class EnhancedMultiStrategyTradingBot:
     def scan_all_strategies_for_entries(self):
         """Enhanced entry scanning across all strategies"""
         try:
+            # Time-based trading filter
+            if not self.should_trade_now():
+                current_hour = datetime.now(timezone.utc).hour
+                logger.info(f"🕐 Outside optimal trading hours (UTC {current_hour}:00) - skipping scan")
+                return
+
             if self.emergency_stop or self.check_emergency_conditions():
                 logger.error("🛑 Emergency conditions detected - stopping entry scanning")
                 return
@@ -8174,6 +8232,12 @@ class EnhancedMultiStrategyTradingBot:
                     strategy_name = signal_data['strategy']
                     side = signal_data['signal']
                     strength = signal_data['strength']
+
+                    # Apply time-based quality filter
+                    if not self.should_trade_now(strength):
+                        logger.info(f"🕐 Signal doesn't meet time-based quality threshold for {symbol}")
+                        continue
+                    
                     current_price = signal_data['current_price']
                     config_data = signal_data['config']
                     
