@@ -6626,11 +6626,11 @@ class AccountManagerConfig:
     """Professional configuration class for AccountManager"""
     def __init__(self):
         # Risk Management Settings
-        self.RISK_PER_TRADE = 0.01  # 2% risk per trade
-        self.MAX_POSITION_PCT = 0.08  # Max 15% of balance per position
+        self.RISK_PER_TRADE = 0.01  # 1% risk per trade
+        self.MAX_POSITION_PCT = 0.08  # Max 8% of balance per position
         self.MAX_PORTFOLIO_RISK = 0.50  # Max 50% total portfolio exposure
         self.MIN_BALANCE_REQUIRED = 500  # Minimum account balance
-        self.DAILY_LOSS_LIMIT_PCT = 0.05  # 10% daily loss limit
+        self.DAILY_LOSS_LIMIT_PCT = 0.05  # 5% daily loss limit
 
         # Performance Settings
         self.BALANCE_CACHE_DURATION = 15  # 15 seconds cache for active trading
