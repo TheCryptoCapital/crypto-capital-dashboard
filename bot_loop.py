@@ -167,18 +167,18 @@ class TrailingConfig:
 class TradingConfig:
     # Position Management - HF BOT OPTIMIZED
     max_position_value: float = 1200                 # ~$1200 max position (21% of balance)
-    max_concurrent_trades: int = 15                  # Match strategy requirements
-# #     profit_target_usd: float = 80                    # $60 profit target (~1% of balance)
-    trail_lock_usd: float = 40                       # Lock $30 profit when trailing
+    max_concurrent_trades: int = 15                  # 8 concurrent positions
+# #     profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
+    trail_lock_usd: float = 30                       # Lock $30 profit when trailing
     max_loss_per_trade: float = 86                   # $86 max loss (1.5% of $5,739)
-    daily_loss_cap: float = 500                     # $500 daily cap (8.7% of balance)
+    daily_loss_cap: float = 1500                     # $500 daily cap (8.7% of balance)
     min_required_balance: float = 1000
     
     # Risk Management - HF OPTIMIZED
     risk_per_trade_pct: float = 1.5                  # 1.5% risk per trade for HF
     max_portfolio_risk_pct: float = 12.0             # 8 × 1.5%
     position_sizing_method: str = "risk_based"
-    emergency_stop_loss_multiplier: float = 1.2      # Tighter emergency stop
+    emergency_stop_loss_multiplier: float = 1.3      # Tighter emergency stop
     
     # Technical Analysis - HF OPTIMIZED
     rsi_oversold: int = 25                           # More extreme for better signals
@@ -194,7 +194,7 @@ class TradingConfig:
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
     scan_interval: int = 15                          # ✅ 15 seconds
-    min_signal_strength=0.70                # Higher quality for fees
+    min_signal_strength=0.05                # Higher quality for fees
     
     # Symbols and Markets
     symbols: List[str] = field(default_factory=list)
@@ -209,7 +209,7 @@ class TradingConfig:
     
     # HIGH-FREQUENCY SAFETY
     max_consecutive_losses: int = 8                  # Higher - more trades expected
-    daily_trade_limit: int = 30                     # ✅ 150 trades target
+    daily_trade_limit: int = 150                     # ✅ 150 trades target
     min_time_between_trades: int = 8                 # Faster - bot can handle it
     max_trades_per_minute: int = 6                   # Rate limiting
     api_rate_limit_buffer: float = 0.8               # Use 80% of API limits
@@ -272,7 +272,7 @@ class TradingConfig:
             logger.warning("⚠️ Signal threshold might be too low for profitable HF trading")
         
         if self.risk_per_trade_pct > 2.0:
-            logger.warning("⚠️ Risk per trade high for 10 trades/day")
+            logger.warning("⚠️ Risk per trade high for 150 trades/day")
         
         self.validate_position_sizing()
 
@@ -330,14 +330,14 @@ class TradingConfig:
 TRAILING_CONFIGS = {
     'RSI_OVERSOLD': TrailingConfig(
         initial_stop_pct=0.4,                        # Tighter for HF
-        trail_activation_pct=1.8,                    # Start trailing sooner
+        trail_activation_pct=0.8,                    # Start trailing sooner
         trail_distance_pct=0.2,                     # Closer trailing
         min_trail_step_pct=0.06,                    # Smaller steps
         max_update_frequency=20                      # More frequent updates
     ),
     'EMA_CROSSOVER': TrailingConfig(
         initial_stop_pct=0.5,
-        trail_activation_pct=1.5,
+        trail_activation_pct=1.0,
         trail_distance_pct=0.25,
         min_trail_step_pct=0.08,
         max_update_frequency=25
@@ -351,7 +351,7 @@ TRAILING_CONFIGS = {
     ),
     'MACD_MOMENTUM': TrailingConfig(
         initial_stop_pct=0.6,
-        trail_activation_pct=1.8,
+        trail_activation_pct=1.2,
         trail_distance_pct=0.3,
         min_trail_step_pct=0.1,
         max_update_frequency=30
@@ -480,7 +480,7 @@ if API_CONFIG['testnet']:
     logger.info("🧪 TESTNET MODE - Safe for HF bot testing!")
 else:
     logger.warning("🚨 LIVE TRADING MODE - Real money at risk!")
-    logger.warning("   HF Bot will execute up to 10 trades/day")
+    logger.warning("   HF Bot will execute up to 150 trades/day")
     logger.warning("   Make sure you understand the risks")
 
 # Initialize HF-Optimized Configuration
@@ -1692,7 +1692,7 @@ class EliteStrategyConfig(StrategyConfig):
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
-                 min_signal_strength=0.80,     # ↑ Elite signal quality threshold
+                 min_signal_strength=0.05,     # ↑ Elite signal quality threshold
                  
                  # 🧠 ADVANCED ML & REGIME FEATURES
                  regime_adaptive: bool = True,           # Elite regime detection
@@ -1807,7 +1807,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.daily_loss_cap = 0.10  # 10% daily loss cap
         self.trading_mode = 'moderate'  # Trading mode
         self.log_hf_error = log_hf_error  # Assign the HF error logging function
-        self.max_concurrent_trades = 12  # Max concurrent trades
+        self.max_concurrent_trades = 15  # Max concurrent trades
 
 # =====================================
 # STRATEGY-SPECIFIC CONFIGURATIONS
@@ -1816,44 +1816,3667 @@ class EliteStrategyConfig(StrategyConfig):
 def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
     """Get optimized configurations for each strategy type"""
     return {
-    StrategyType.RSI_SCALP: EliteStrategyConfig(
-        name="RSI Quantum Pro",
-        enabled=True,
-        max_positions=1,
-        position_value=0,
-        position_sizing_method="risk_based",
-        risk_per_trade_pct=1.5,
-        min_signal_strength=0.82,         # Lower threshold for HFQ
-        strong_signal_threshold=0.85,      # Strong signal threshold
-        elite_signal_threshold=0.92,       # Elite signal threshold
+    StrategyType.RSI_SCALP: StrategyConfig(
+            name="RSI_Scalp_Fast",
+            max_positions=3,
+            position_value=0,
+            position_sizing_method="risk_based",
+            risk_per_trade_pct=1.5,
+            min_confidence=0.75,
+            max_daily_trades=80,
+            signal_cache_seconds=15,
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
+            'DOGEUSDT', 'AVAXUSDT', 'LINKUSDT', 'MATICUSDT', 'DOTUSDT', 'ATOMUSDT'
+            ],
+            max_drawdown_pct=3.0
+    ),
         
-        # Indicator parameters (HFQ optimized)
-        rsi_period=12,                     # Faster RSI for HFQ
-        rsi_oversold=25,                   # Standard levels for HFQ
-        rsi_overbought=75,
-        ema_fast=5,                        # Very fast EMA for HFQ
-        ema_slow=13,                       # Faster slow EMA
-        ema_trend=34,                      # Trend filter
-        macd_fast=8,                       # Faster MACD for HFQ
-        macd_slow=17,
-        macd_signal=6,
+        StrategyType.EMA_CROSS: StrategyConfig(
+        name="EMA_Cross_Swing",
+        max_positions=2,
+        position_value=0,                            # ✅ Use dynamic risk sizing
+        position_sizing_method="risk_based",         # ✅ Enable HFQ sizing
+        risk_per_trade_pct=1.5,                      # ✅ 1.5% of balance per trade
+        min_confidence=0.65,
+        max_daily_trades=20,                         # Lower frequency for swing trades
+        signal_cache_seconds=60,                     # Longer cache for swing signals
+        allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT', 'XRPUSDT', 'LINKUSDT',
+            'SOLUSDT', 'BNBUSDT', 'AVAXUSDT', 'MATICUSDT', 'ATOMUSDT', 'LTCUSDT'
+        ],  # Stable but broader swing universe
+        max_drawdown_pct=6.0                         # More tolerance for swing trades
+    ),
+
+        StrategyType.SCALPING: StrategyConfig(
+        name="Ultra_Scalp",
+            max_positions=4,
+            position_value=0,                            # ✅ Dynamic sizing
+            position_sizing_method="risk_based",         # ✅ Enables % balance sizing
+            risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
+            min_confidence=0.8,
+            max_daily_trades=120,                        # Highest frequency
+            signal_cache_seconds=10,                     # Very short cache
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT', 'MATICUSDT', 'XRPUSDT',
+            'DOGEUSDT', 'BNBUSDT', 'LINKUSDT', 'DOTUSDT', 'ADAUSDT', 'ATOMUSDT'
+            ],  # Expanded to 12 high-liquidity pairs
+            max_drawdown_pct=2.5                         # Strictest control
+    ),
+
         
-        # Volume analysis (HFQ optimized)
-        volume_lookback=15,                # Shorter lookback for HFQ
-        significant_volume_ratio=2.5,      # 1.3x average volume
-        extreme_volume_ratio=3.0,          # 2.5x average volume
+    StrategyType.MACD_MOMENTUM: StrategyConfig(
+            name="MACD_Momentum",
+            max_positions=2,
+            position_value=0,                            # ✅ Enable dynamic sizing
+        position_sizing_method="risk_based",         # ✅ Use risk-based logic
+            risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
+            min_confidence=0.7,
+            max_daily_trades=30,                         # Medium frequency
+            signal_cache_seconds=45,                     # Medium cache
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'LINKUSDT', 'MATICUSDT', 'UNIUSDT',
+            'AVAXUSDT', 'SOLUSDT', 'DOTUSDT', 'XRPUSDT', 'ATOMUSDT', 'LTCUSDT'
+            ],  # Expanded for more momentum options
+            max_drawdown_pct=7.0                         # More tolerance for momentum
+    ),
+
         
-        # Performance tracking (HFQ optimized)
-        daily_trade_target=10,            # 150 high-quality composite trades/day
-        executed_trades_today=0,
-        daily_opportunities_analyzed=0,
-        opportunity_pool_size=300, # Larger pool for HFQ
+        # ✅ FIXED - Added the missing RSI_OVERSOLD strategy
+    StrategyType.RSI_OVERSOLD: StrategyConfig(
+            name="RSI_Oversold_Recovery",
+            max_positions=3,
+            position_value=0,                            # ✅ Enable dynamic sizing
+            position_sizing_method="risk_based",         # ✅ Risk-based sizing logic
+            risk_per_trade_pct=1.5,                      # ✅ 1.5% risk per trade
+            min_confidence=0.72,
+            max_daily_trades=40,
+            signal_cache_seconds=25,
+            allowed_symbols=[
+            'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT', 'XRPUSDT', 'LINKUSDT',
+            'AVAXUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'BNBUSDT', 'ATOMUSDT'
+            ],  # Expanded to 12 strong RSI-responsive symbols
+            max_drawdown_pct=4.0
+    ),
+        
+        # ✅ NEW - HFQ-Lite Volume Spike Strategy (Your 150 trades/day)
+        StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
+            name="HFQ_Volume_Spike",
+            max_positions=1,                   # Higher concurrent positions
+            position_value=0,                  # Max position cap
+            min_confidence=0.70,               # 70% minimum quality
+            risk_per_trade=1.5,                # 1.5% risk per trade
+            max_daily_trades=150,              # ✅ Your 150 trades/day target
+            signal_cache_seconds=5,            # Fast 5-second scanning
+            max_drawdown_pct=12.0,             # 12% max portfolio risk
+            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
+                           'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
+            
+            # HFQ-specific settings
+            min_quality_score=0.70,
+            excellent_quality=0.85,
+            elite_quality=0.95,
+            moderate_spike_ratio=2.0,
+            strong_spike_ratio=3.0,
+            institutional_spike_ratio=5.0,
+            extreme_spike_ratio=8.0,
+            
+            # Enhanced risk management
+            max_portfolio_risk=0.12,
+            position_sizing_method="risk_based",
+            stop_loss_pct=0.02,
+            take_profit_pct=0.04
         ),
         
-        # Quality statistics
-    
-}
+        # ✅ NEW - Bollinger Bands Strategy
+        StrategyType.BOLLINGER_BANDS: StrategyConfig(
+            name="Bollinger_Squeeze",
+            max_positions=1,
+            position_value=220.0,
+            min_confidence=0.73,
+            max_daily_trades=45,
+            signal_cache_seconds=30,
+            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'LINKUSDT'],
+            max_drawdown_pct=5.5
+        ),
+        
+        # ✅ NEW - Momentum Breakout Strategy  
+        StrategyType.MOMENTUM_BREAKOUT: StrategyConfig(
+            name="Momentum_Breakout",
+            max_positions=1,
+            position_value=300.0,
+            min_confidence=0.78,
+            max_daily_trades=25,
+            signal_cache_seconds=40,
+            allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'],
+            max_drawdown_pct=6.5
+        )
+    }
 
+# =====================================
+# ENHANCED BASE STRATEGY CLASS
+# =====================================
+
+class BaseStrategy:
+    """
+    Enhanced Base Strategy Class for HF Trading
+    Combines your clean structure with HF optimizations
+    """
+    
+    def __init__(self, strategy_type: StrategyType, config: StrategyConfig, 
+                 session, market_data, logger):
+        # Core strategy data
+        self.strategy_type = strategy_type
+        self.config = config
+        self.session = session
+        self.market_data = market_data
+        self.logger = logger
+        
+        # Position and performance tracking
+        self.positions = []
+        self.trades_today = 0
+        self.daily_pnl = 0.0
+        self.success_count = 0
+        self.failure_count = 0
+        self.max_drawdown = 0.0
+        self.peak_pnl = 0.0
+        
+        # HF-specific optimizations
+        self.last_analysis_time = {}  # Per-symbol analysis timestamps
+        self.signal_cache = {}        # Cache recent signals
+        self.cache_duration = timedelta(seconds=config.signal_cache_seconds)
+        
+        # Performance metrics
+        self.signals_generated = 0
+        self.avg_signal_strength = 0.0
+        self.last_signal_time = datetime.now()
+        
+        self.logger.info(f"🎯 Strategy {config.name} initialized [{strategy_type.value}]")
+    
+    def is_enabled(self) -> bool:
+        """Check if strategy is enabled and within limits"""
+        if not self.config.enabled:
+            return False
+        
+        # Check daily trade limit
+        if self.trades_today >= self.config.max_daily_trades:
+            self.logger.warning(f"Daily trade limit reached for {self.config.name}")
+            return False
+        
+        # Check drawdown limit
+        if self.max_drawdown >= self.config.max_drawdown_pct:
+            self.logger.warning(f"Max drawdown reached for {self.config.name}")
+            return False
+        
+        return True
+    
+    def should_analyze_symbol(self, symbol: str) -> bool:
+        """Check if symbol should be analyzed (rate limiting + validation)"""
+        if not self.is_enabled():
+            return False
+        
+        # Symbol whitelist check
+        if symbol not in self.config.allowed_symbols:
+            return False
+        
+        # Rate limiting - don't analyze same symbol too frequently
+        last_analysis = self.last_analysis_time.get(symbol, datetime.min)
+        if (datetime.now() - last_analysis) < timedelta(seconds=15):
+            return False
+        
+        return True
+    
+    def get_cached_signal(self, symbol: str) -> Optional[Tuple[str, float, Dict]]:
+        """Get cached signal if still valid"""
+        if symbol not in self.signal_cache:
+            return None
+        
+        signal_data, timestamp = self.signal_cache[symbol]
+        if (datetime.now() - timestamp) < self.cache_duration:
+            return signal_data
+        
+        # Remove expired cache
+        del self.signal_cache[symbol]
+        return None
+    
+    def cache_signal(self, symbol: str, signal_data: Tuple[str, float, Dict]):
+        """Cache signal result"""
+        self.signal_cache[symbol] = (signal_data, datetime.now())
+    
+    async def analyze_symbol(self, symbol: str, timeframe: str = '1m') -> Optional[Tuple[str, float, Dict]]:
+        """
+        Main analysis method - checks cache first, then generates new signal
+        """
+        try:
+            # Check if we should analyze this symbol
+            if not self.should_analyze_symbol(symbol):
+                return self.get_cached_signal(symbol)
+            
+            # Check cache first
+            cached_signal = self.get_cached_signal(symbol)
+            if cached_signal:
+                return cached_signal
+            
+            # Get market data
+            df = await self.get_market_data(symbol, timeframe)
+            if df is None or len(df) < 50:  # Need enough data
+                return None
+            
+            # Generate new signal
+            signal, strength, analysis_data = self.generate_signal(df)
+            
+            # Update timestamps
+            self.last_analysis_time[symbol] = datetime.now()
+            self.last_signal_time = datetime.now()
+            
+            # Cache the result
+            signal_result = (signal, strength, analysis_data)
+            self.cache_signal(symbol, signal_result)
+            
+            # Update performance metrics
+            self.signals_generated += 1
+            self.avg_signal_strength = (
+                (self.avg_signal_strength * (self.signals_generated - 1) + strength) / 
+                self.signals_generated
+            )
+            
+            if signal in ['Buy', 'Sell'] and strength >= self.config.min_confidence:
+                self.logger.info(f"🎯 {self.config.name} SIGNAL: {symbol} {signal} "
+                               f"({strength:.2f}) [{self.strategy_type.value}]")
+            
+            return signal_result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Analysis error for {symbol} [{self.config.name}]: {e}")
+            return None
+    
+    async def get_market_data(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
+        """Get market data for analysis"""
+        try:
+            # This integrates with your market_data component or session
+            # For now, using session approach - you may need to adjust based on your setup
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, 
+                lambda: self.session.get_kline(
+                    category="linear",
+                    symbol=symbol,
+                    interval=timeframe,
+                    limit=200
+                )
+            )
+            
+            if result.get('retCode') == 0:
+                klines = result.get('result', {}).get('list', [])
+                if klines:
+                    # Convert to DataFrame
+                    df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df = df.astype({
+                        'timestamp': 'int64',
+                        'open': 'float64',
+                        'high': 'float64', 
+                        'low': 'float64',
+                        'close': 'float64',
+                        'volume': 'float64'
+                    })
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    return df.sort_values('timestamp').reset_index(drop=True)
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting market data for {symbol}: {e}")
+            return None
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """
+        Override in each strategy
+        Args:
+            df: DataFrame with OHLCV data
+        Returns:
+            (signal, strength, analysis_data)
+            signal: "Buy", "Sell", or "Hold"
+            strength: 0.0 to 1.0
+            analysis_data: Dict with technical indicators
+        """
+        return "Hold", 0.0, {}
+    
+    async def calculate_position_size(self, symbol: str, entry_price: float, stop_price: float) -> float:
+        """
+        Calculate position size with AccountManager integration
+        Uses dynamic risk-based sizing or falls back to simple calculation
+        """
+        try:
+            # Integration with AccountManager (when available)
+            if hasattr(self, 'account_manager') and self.account_manager:
+                calc = await self.account_manager.calculate_position_size(
+                    symbol, entry_price, stop_price, "Buy"
+                )
+                if calc and hasattr(calc, 'size'):
+                    return float(calc.size)
+            
+            # Fallback: Risk-based calculation
+            risk_amount = self.config.risk_per_trade  # $100 default
+            stop_distance = abs(entry_price - stop_price)
+            
+            if stop_distance <= 0:
+                # Use percentage-based stop if no stop price
+                stop_distance = entry_price * 0.015  # 1.5% default risk
+            
+            # Calculate position size based on risk
+            position_size = risk_amount / stop_distance
+            
+            # Apply minimum size constraints
+            min_size = 0.001  # Default minimum, can be symbol-specific
+            if hasattr(self.config, 'min_position_size'):
+                min_size = self.config.min_position_size
+            
+            position_size = max(position_size, min_size)
+            
+            # Apply maximum position value constraint
+            max_value_size = self.config.position_value / entry_price
+            position_size = min(position_size, max_value_size)
+            
+            self.logger.debug(f"💰 Position size for {symbol}: {position_size:.6f} "
+                            f"(Risk: ${risk_amount}, Stop: ${stop_distance:.2f})")
+            
+            return round(position_size, 6)
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating position size: {e}")
+            # Ultimate fallback
+            return self.config.position_value / entry_price
+    
+    def record_trade_result(self, symbol: str, entry_price: float, exit_price: float, 
+                          side: str, position_size: float, success: bool):
+        """Record trade result for performance tracking"""
+        try:
+            # Calculate PnL
+            if side == "Buy":
+                pnl = (exit_price - entry_price) * position_size
+            else:
+                pnl = (entry_price - exit_price) * position_size
+            
+            # Update counters
+            self.trades_today += 1
+            if success:
+                self.success_count += 1
+            else:
+                self.failure_count += 1
+            
+            # Update PnL tracking
+            self.daily_pnl += pnl
+            if self.daily_pnl > self.peak_pnl:
+                self.peak_pnl = self.daily_pnl
+            
+            # Update drawdown
+            current_drawdown = ((self.peak_pnl - self.daily_pnl) / max(self.peak_pnl, 1)) * 100
+            if current_drawdown > self.max_drawdown:
+                self.max_drawdown = current_drawdown
+            
+            self.logger.info(f"📊 {self.config.name} Trade: {symbol} {side} "
+                           f"PnL: ${pnl:.2f} | Daily: ${self.daily_pnl:.2f}")
+            
+        except Exception as e:
+            self.logger.error(f"Error recording trade result: {e}")
+    
+    def get_strategy_info(self) -> Dict:
+        """Get comprehensive strategy performance info"""
+        total_trades = self.success_count + self.failure_count
+        win_rate = (self.success_count / total_trades * 100) if total_trades > 0 else 0
+        
+        return {
+            'name': self.config.name,
+            'type': self.strategy_type.value,
+            'enabled': self.config.enabled,
+            
+            # Trading metrics
+            'trades_today': self.trades_today,
+            'success_count': self.success_count,
+            'failure_count': self.failure_count,
+            'win_rate': win_rate,
+            'daily_pnl': self.daily_pnl,
+            'max_drawdown': self.max_drawdown,
+            
+            # Signal metrics
+            'signals_generated': self.signals_generated,
+            'avg_signal_strength': self.avg_signal_strength,
+            'last_signal_time': self.last_signal_time.isoformat(),
+            'cache_size': len(self.signal_cache),
+            
+            # Configuration
+            'max_positions': self.config.max_positions,
+            'position_value': self.config.position_value,
+            'min_confidence': self.config.min_confidence,
+            'max_daily_trades': self.config.max_daily_trades
+        }
+    
+    def reset_daily_stats(self):
+        """Reset daily statistics (call at start of new day)"""
+        self.trades_today = 0
+        self.daily_pnl = 0.0
+        self.success_count = 0
+        self.failure_count = 0
+        self.max_drawdown = 0.0
+        self.peak_pnl = 0.0
+        self.signals_generated = 0
+        
+        self.logger.info(f"📅 Daily stats reset for {self.config.name}")
+    
+    def cleanup_cache(self):
+        """Clean up expired cache entries"""
+        current_time = datetime.now()
+        expired_symbols = []
+        
+        for symbol, (_, timestamp) in self.signal_cache.items():
+            if (current_time - timestamp) > self.cache_duration:
+                expired_symbols.append(symbol)
+        
+        for symbol in expired_symbols:
+            del self.signal_cache[symbol]
+    
+    def __str__(self):
+        return f"Strategy({self.config.name}, {self.strategy_type.value}, enabled={self.config.enabled})"
+    
+    def __repr__(self):
+        return self.__str__()
+
+# =====================================
+# STRATEGY VALIDATION & UTILITIES
+# =====================================
+
+def get_strategy_config(strategy_type: StrategyType) -> StrategyConfig:
+    """Get configuration for a specific strategy type"""
+    configs = get_strategy_configs()
+    if strategy_type not in configs:
+        raise ValueError(f"No configuration found for strategy: {strategy_type}")
+    return configs[strategy_type]
+
+def get_enabled_strategies() -> List[StrategyType]:
+    """Get list of all enabled strategies"""
+    configs = get_strategy_configs()
+    return [
+        strategy_type for strategy_type, config in configs.items() 
+        if config.enabled
+    ]
+
+def get_hfq_strategies() -> List[StrategyType]:
+    """Get list of high-frequency quality strategies"""
+    configs = get_strategy_configs()
+    return [
+        strategy_type for strategy_type, config in configs.items()
+        if isinstance(config, EliteStrategyConfig)
+    ]
+
+def validate_strategy_configs():
+    """Validate all strategy configurations"""
+    configs = get_strategy_configs()
+    total_daily_trades = sum(config.max_daily_trades for config in configs.values())
+    total_max_positions = sum(config.max_positions for config in configs.values())
+    
+    print(f"📊 STRATEGY SYSTEM VALIDATION:")
+    print(f"   Total Strategies: {len(configs)}")
+    print(f"   Enabled Strategies: {len(get_enabled_strategies())}")
+    print(f"   HFQ Strategies: {len(get_hfq_strategies())}")
+    print(f"   Max Daily Trades: {total_daily_trades}")
+    print(f"   Max Concurrent Positions: {total_max_positions}")
+    if StrategyType.VOLUME_SPIKE in configs:
+        print(f"   HFQ Volume Spike Target: {configs[StrategyType.VOLUME_SPIKE].max_daily_trades} trades/day")
+    
+    return True
+
+# =====================================
+# STRATEGY 1: RSI SCALPING STRATEGY
+# =====================================
+
+class RSIStrategy(BaseStrategy):
+    """
+    Enhanced RSI Scalping Strategy for HF Trading
+    Optimized for 80 trades/day with volume and momentum confirmation
+    """
+    
+    def __init__(self, config: StrategyConfig, session, market_data, logger):
+        super().__init__(StrategyType.RSI_SCALP, config, session, market_data, logger)
+        
+        # RSI-specific parameters
+        self.rsi_period = 14
+        self.rsi_oversold_strong = 20
+        self.rsi_oversold_moderate = 30
+        self.rsi_overbought_moderate = 70
+        self.rsi_overbought_strong = 80
+        
+        # HF scalping parameters
+        self.volume_multiplier_threshold = 1.5  # Volume must be 1.5x average
+        self.price_momentum_threshold = 0.002   # 0.2% price momentum
+        self.rsi_trend_periods = 3              # RSI trend over 3 periods
+        
+    def calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
+        """Calculate RSI indicator"""
+        try:
+            delta = prices.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            return rsi
+            
+        except Exception as e:
+            self.logger.error(f"RSI calculation error: {e}")
+            return pd.Series([50] * len(prices))
+    
+    def calculate_volume_confirmation(self, df: pd.DataFrame) -> Dict:
+        """Calculate volume-based confirmation signals"""
+        try:
+            current_volume = df['volume'].iloc[-1]
+            avg_volume_5 = df['volume'].tail(5).mean()
+            avg_volume_20 = df['volume'].tail(20).mean()
+            
+            volume_ratio_recent = current_volume / avg_volume_5 if avg_volume_5 > 0 else 1
+            volume_ratio_longer = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1
+            
+            # Volume surge detection
+            volume_surge = volume_ratio_recent > self.volume_multiplier_threshold
+            
+            return {
+                'volume_ratio_recent': volume_ratio_recent,
+                'volume_ratio_longer': volume_ratio_longer,
+                'volume_surge': volume_surge,
+                'avg_volume_5': avg_volume_5,
+                'current_volume': current_volume
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Volume calculation error: {e}")
+            return {'volume_surge': False, 'volume_ratio_recent': 1.0}
+    
+    def calculate_price_momentum(self, df: pd.DataFrame) -> Dict:
+        """Calculate price momentum and trend confirmation"""
+        try:
+            # Price momentum over different periods
+            price_change_1 = (df['close'].iloc[-1] - df['close'].iloc[-2]) / df['close'].iloc[-2]
+            price_change_3 = (df['close'].iloc[-1] - df['close'].iloc[-4]) / df['close'].iloc[-4]
+            price_change_5 = (df['close'].iloc[-1] - df['close'].iloc[-6]) / df['close'].iloc[-6]
+            
+            # Price action confirmation
+            current_candle = df.iloc[-1]
+            prev_candle = df.iloc[-2]
+            
+            # Bullish price action
+            bullish_candle = current_candle['close'] > current_candle['open']
+            bullish_momentum = price_change_3 > self.price_momentum_threshold
+            
+            # Bearish price action  
+            bearish_candle = current_candle['close'] < current_candle['open']
+            bearish_momentum = price_change_3 < -self.price_momentum_threshold
+            
+            return {
+                'price_change_1': price_change_1,
+                'price_change_3': price_change_3,
+                'price_change_5': price_change_5,
+                'bullish_candle': bullish_candle,
+                'bearish_candle': bearish_candle,
+                'bullish_momentum': bullish_momentum,
+                'bearish_momentum': bearish_momentum
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Price momentum calculation error: {e}")
+            return {'bullish_momentum': False, 'bearish_momentum': False}
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """
+        Enhanced RSI Scalping Signal Generation
+        Combines RSI, volume, and price momentum for HF trading
+        """
+        try:
+            if len(df) < 30:  # Need enough data for reliable signals
+                return "Hold", 0.0, {}
+            
+            # Calculate RSI
+            rsi_series = self.calculate_rsi(df['close'], self.rsi_period)
+            current_rsi = rsi_series.iloc[-1]
+            
+            # RSI trend analysis
+            rsi_recent = rsi_series.tail(self.rsi_trend_periods)
+            rsi_trend = rsi_recent.pct_change().mean()
+            rsi_slope = (rsi_recent.iloc[-1] - rsi_recent.iloc[0]) / len(rsi_recent)
+            
+            # Volume and momentum confirmation
+            volume_data = self.calculate_volume_confirmation(df)
+            momentum_data = self.calculate_price_momentum(df)
+            
+            # Compile analysis data
+            analysis = {
+                'rsi': current_rsi,
+                'rsi_trend': rsi_trend,
+                'rsi_slope': rsi_slope,
+                'price': df['close'].iloc[-1],
+                'volume_surge': volume_data['volume_surge'],
+                'volume_ratio': volume_data['volume_ratio_recent'],
+                'bullish_momentum': momentum_data['bullish_momentum'],
+                'bearish_momentum': momentum_data['bearish_momentum'],
+                'price_change_3': momentum_data['price_change_3']
+            }
+            
+            # BULLISH SIGNALS
+            if current_rsi <= self.rsi_oversold_strong:  # Strong oversold (≤20)
+                base_strength = (self.rsi_oversold_strong - current_rsi) / self.rsi_oversold_strong
+                
+                # Confirmation factors
+                confirmations = []
+                if rsi_trend > 0:  # RSI starting to turn up
+                    confirmations.append(0.2)
+                if volume_data['volume_surge']:  # Volume spike
+                    confirmations.append(0.3)
+                if momentum_data['bullish_momentum']:  # Price momentum
+                    confirmations.append(0.2)
+                if momentum_data['bullish_candle']:  # Bullish candle
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Buy", strength, analysis
+                    
+            elif current_rsi <= self.rsi_oversold_moderate and rsi_trend > 0:  # Moderate oversold with upturn
+                base_strength = (self.rsi_oversold_moderate - current_rsi) / self.rsi_oversold_moderate * 0.7
+                
+                # Need stronger confirmation for moderate signals
+                confirmations = []
+                if volume_data['volume_surge']:
+                    confirmations.append(0.25)
+                if momentum_data['bullish_momentum']:
+                    confirmations.append(0.25)
+                if rsi_slope > 1:  # Strong RSI upturn
+                    confirmations.append(0.15)
+                
+                strength = min(base_strength + sum(confirmations), 0.9)
+                
+                if strength >= self.config.min_confidence:
+                    return "Buy", strength, analysis
+            
+            # BEARISH SIGNALS
+            elif current_rsi >= self.rsi_overbought_strong:  # Strong overbought (≥80)
+                base_strength = (current_rsi - self.rsi_overbought_strong) / (100 - self.rsi_overbought_strong)
+                
+                # Confirmation factors
+                confirmations = []
+                if rsi_trend < 0:  # RSI starting to turn down
+                    confirmations.append(0.2)
+                if volume_data['volume_surge']:  # Volume spike
+                    confirmations.append(0.3)
+                if momentum_data['bearish_momentum']:  # Price momentum
+                    confirmations.append(0.2)
+                if momentum_data['bearish_candle']:  # Bearish candle
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Sell", strength, analysis
+                    
+            elif current_rsi >= self.rsi_overbought_moderate and rsi_trend < 0:  # Moderate overbought with downturn
+                base_strength = (current_rsi - self.rsi_overbought_moderate) / (100 - self.rsi_overbought_moderate) * 0.7
+                
+                # Need stronger confirmation for moderate signals
+                confirmations = []
+                if volume_data['volume_surge']:
+                    confirmations.append(0.25)
+                if momentum_data['bearish_momentum']:
+                    confirmations.append(0.25)
+                if rsi_slope < -1:  # Strong RSI downturn
+                    confirmations.append(0.15)
+                
+                strength = min(base_strength + sum(confirmations), 0.9)
+                
+                if strength >= self.config.min_confidence:
+                    return "Sell", strength, analysis
+            
+            return "Hold", 0.0, analysis
+            
+        except Exception as e:
+            self.logger.error(f"❌ RSI signal generation error: {e}")
+            return "Hold", 0.0, {}
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get RSI-specific strategy information"""
+        base_info = self.get_strategy_info()
+        
+        rsi_info = {
+            'rsi_period': self.rsi_period,
+            'oversold_strong': self.rsi_oversold_strong,
+            'oversold_moderate': self.rsi_oversold_moderate,
+            'overbought_moderate': self.rsi_overbought_moderate,
+            'overbought_strong': self.rsi_overbought_strong,
+            'volume_threshold': self.volume_multiplier_threshold,
+            'momentum_threshold': self.price_momentum_threshold
+        }
+        
+        return {**base_info, 'rsi_config': rsi_info}
+
+# Usage example:
+"""
+# Initialize RSI strategy with HF config
+strategy_configs = get_strategy_configs()
+rsi_strategy = RSIStrategy(
+    config=strategy_configs[StrategyType.RSI_SCALP],
+    session=bybit_session,
+    market_data=ta_engine,
+    logger=logger
+)
+
+# In your scanner loop:
+signal_result = await rsi_strategy.analyze_symbol("BTCUSDT")
+if signal_result and signal_result[0] in ['Buy', 'Sell']:
+    # Execute trade with trailing stop
+    symbol, signal, strength = signal_result[0], signal_result[1], signal_result[2] 
+    if strength >= 0.75:  # High confidence threshold
+        # Place order logic here
+"""
+
+# =====================================
+# STRATEGY 2: EMA CROSSOVER SWING STRATEGY
+# =====================================
+
+class EMAStrategy(BaseStrategy):
+    """
+    Enhanced EMA Crossover Strategy for HF Swing Trading
+    Optimized for 20 trades/day with trend strength and volume confirmation
+    """
+    
+    def __init__(self, config: StrategyConfig, session, market_data, logger):
+        super().__init__(StrategyType.EMA_CROSS, config, session, market_data, logger)
+        
+        # EMA parameters
+        self.ema_fast_period = 9
+        self.ema_slow_period = 21
+        self.ema_trend_period = 50  # Longer-term trend filter
+        
+        # Swing trading parameters
+        self.min_separation_pct = 0.15      # Minimum EMA separation for valid signal
+        self.trend_strength_periods = 5     # Periods to check trend consistency
+        self.volume_confirmation_periods = 10  # Volume confirmation lookback
+        self.breakout_confirmation_candles = 2  # Candles to confirm breakout
+        
+        # Trend persistence thresholds
+        self.min_trend_persistence = 0.6    # 60% of recent candles must align
+        self.strong_trend_threshold = 0.8   # 80% alignment for strong trends
+        
+    def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
+        """Calculate Exponential Moving Average"""
+        try:
+            return prices.ewm(span=period, adjust=False).mean()
+        except Exception as e:
+            self.logger.error(f"EMA calculation error: {e}")
+            return prices.rolling(window=period).mean()  # Fallback to SMA
+    
+    def calculate_trend_strength(self, df: pd.DataFrame, ema_fast: pd.Series, ema_slow: pd.Series) -> Dict:
+        """Calculate trend strength and persistence"""
+        try:
+            # Recent trend consistency
+            recent_candles = df.tail(self.trend_strength_periods)
+            ema_fast_recent = ema_fast.tail(self.trend_strength_periods)
+            ema_slow_recent = ema_slow.tail(self.trend_strength_periods)
+            
+            # Count bullish vs bearish alignments
+            bullish_alignments = 0
+            bearish_alignments = 0
+            
+            for i in range(len(recent_candles)):
+                price = recent_candles.iloc[i]['close']
+                fast = ema_fast_recent.iloc[i]
+                slow = ema_slow_recent.iloc[i]
+                
+                if price > fast > slow:  # Strong bullish alignment
+                    bullish_alignments += 1
+                elif price < fast < slow:  # Strong bearish alignment
+                    bearish_alignments += 1
+            
+            # Calculate trend persistence
+            total_periods = len(recent_candles)
+            bullish_persistence = bullish_alignments / total_periods
+            bearish_persistence = bearish_alignments / total_periods
+            
+            # EMA slope analysis
+            ema_fast_slope = (ema_fast.iloc[-1] - ema_fast.iloc[-5]) / ema_fast.iloc[-5] * 100
+            ema_slow_slope = (ema_slow.iloc[-1] - ema_slow.iloc[-5]) / ema_slow.iloc[-5] * 100
+            
+            return {
+                'bullish_persistence': bullish_persistence,
+                'bearish_persistence': bearish_persistence,
+                'strong_bullish_trend': bullish_persistence >= self.strong_trend_threshold,
+                'strong_bearish_trend': bearish_persistence >= self.strong_trend_threshold,
+                'ema_fast_slope': ema_fast_slope,
+                'ema_slow_slope': ema_slow_slope,
+                'trend_alignment': bullish_alignments - bearish_alignments
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Trend strength calculation error: {e}")
+            return {'bullish_persistence': 0, 'bearish_persistence': 0}
+    
+    def calculate_volume_profile(self, df: pd.DataFrame) -> Dict:
+        """Calculate volume profile for swing trade confirmation"""
+        try:
+            current_volume = df['volume'].iloc[-1]
+            recent_volume = df['volume'].tail(self.volume_confirmation_periods)
+            
+            # Volume analysis
+            avg_volume = recent_volume.mean()
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+            
+            # Volume trend (increasing vs decreasing)
+            volume_slope = 0
+            if len(recent_volume) >= 5:
+                volume_recent = recent_volume.tail(5)
+                volume_slope = (volume_recent.iloc[-1] - volume_recent.iloc[0]) / volume_recent.iloc[0]
+            
+            # Volume distribution analysis
+            high_volume_candles = sum(1 for v in recent_volume if v > avg_volume * 1.2)
+            volume_consistency = high_volume_candles / len(recent_volume)
+            
+            return {
+                'volume_ratio': volume_ratio,
+                'volume_trend': volume_slope,
+                'volume_consistency': volume_consistency,
+                'avg_volume': avg_volume,
+                'volume_surge': volume_ratio > 1.3,  # 30% above average
+                'sustained_volume': volume_consistency > 0.4  # 40% of candles high volume
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Volume profile calculation error: {e}")
+            return {'volume_surge': False, 'volume_ratio': 1.0}
+    
+    def detect_false_breakout_risk(self, df: pd.DataFrame, ema_fast: pd.Series, ema_slow: pd.Series) -> Dict:
+        """Detect potential false breakout conditions"""
+        try:
+            # Check for recent failed crossovers
+            lookback_periods = 10
+            recent_ema_fast = ema_fast.tail(lookback_periods)
+            recent_ema_slow = ema_slow.tail(lookback_periods)
+            
+            # Count crossovers in recent periods
+            crossover_count = 0
+            for i in range(1, len(recent_ema_fast)):
+                if ((recent_ema_fast.iloc[i-1] <= recent_ema_slow.iloc[i-1] and 
+                     recent_ema_fast.iloc[i] > recent_ema_slow.iloc[i]) or
+                    (recent_ema_fast.iloc[i-1] >= recent_ema_slow.iloc[i-1] and 
+                     recent_ema_fast.iloc[i] < recent_ema_slow.iloc[i])):
+                    crossover_count += 1
+            
+            # High crossover count indicates choppy market
+            choppy_market = crossover_count > 3
+            
+            # Check price volatility
+            recent_prices = df['close'].tail(lookback_periods)
+            price_volatility = recent_prices.std() / recent_prices.mean() * 100
+            high_volatility = price_volatility > 2.0  # 2% volatility threshold
+            
+            # Support/resistance near current price
+            current_price = df['close'].iloc[-1]
+            recent_highs = df['high'].tail(20).max()
+            recent_lows = df['low'].tail(20).min()
+            
+            near_resistance = abs(current_price - recent_highs) / current_price < 0.005  # Within 0.5%
+            near_support = abs(current_price - recent_lows) / current_price < 0.005
+            
+            return {
+                'choppy_market': choppy_market,
+                'crossover_count': crossover_count,
+                'high_volatility': high_volatility,
+                'price_volatility': price_volatility,
+                'near_resistance': near_resistance,
+                'near_support': near_support,
+                'false_breakout_risk': choppy_market or (high_volatility and (near_resistance or near_support))
+            }
+            
+        except Exception as e:
+            self.logger.error(f"False breakout detection error: {e}")
+            return {'false_breakout_risk': False}
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """
+        Enhanced EMA Crossover Signal Generation
+        Combines trend strength, volume, and false breakout protection
+        """
+        try:
+            if len(df) < 60:  # Need enough data for reliable swing signals
+                return "Hold", 0.0, {}
+            
+            # Calculate EMAs
+            ema_fast = self.calculate_ema(df['close'], self.ema_fast_period)
+            ema_slow = self.calculate_ema(df['close'], self.ema_slow_period)
+            ema_trend = self.calculate_ema(df['close'], self.ema_trend_period)
+            
+            current_price = df['close'].iloc[-1]
+            fast_current = ema_fast.iloc[-1]
+            slow_current = ema_slow.iloc[-1]
+            trend_current = ema_trend.iloc[-1]
+            
+            # Previous values for crossover detection
+            fast_prev = ema_fast.iloc[-2]
+            slow_prev = ema_slow.iloc[-2]
+            
+            # Calculate EMA separation
+            ema_separation = abs(fast_current - slow_current) / slow_current * 100
+            
+            # Advanced analysis
+            trend_data = self.calculate_trend_strength(df, ema_fast, ema_slow)
+            volume_data = self.calculate_volume_profile(df)
+            breakout_data = self.detect_false_breakout_risk(df, ema_fast, ema_slow)
+            
+            # Compile analysis data
+            analysis = {
+                'ema_fast': fast_current,
+                'ema_slow': slow_current,
+                'ema_trend': trend_current,
+                'price': current_price,
+                'separation': ema_separation,
+                'trend_strength': trend_data['bullish_persistence'] - trend_data['bearish_persistence'],
+                'volume_surge': volume_data['volume_surge'],
+                'false_breakout_risk': breakout_data['false_breakout_risk'],
+                'choppy_market': breakout_data['choppy_market']
+            }
+            
+            # Skip if high false breakout risk
+            if breakout_data['false_breakout_risk']:
+                return "Hold", 0.0, analysis
+            
+            # BULLISH CROSSOVER SIGNAL
+            if (fast_prev <= slow_prev and fast_current > slow_current and 
+                ema_separation >= self.min_separation_pct):
+                
+                # Base strength from separation and trend alignment
+                base_strength = min(ema_separation * 3, 0.6)
+                
+                # Confirmation factors
+                confirmations = []
+                
+                # Price above fast EMA (momentum confirmation)
+                if current_price > fast_current:
+                    confirmations.append(0.15)
+                
+                # Long-term trend alignment
+                if current_price > trend_current:
+                    confirmations.append(0.2)
+                
+                # Trend persistence
+                if trend_data['bullish_persistence'] >= self.min_trend_persistence:
+                    confirmations.append(0.15)
+                
+                # Volume confirmation
+                if volume_data['volume_surge']:
+                    confirmations.append(0.2)
+                
+                # Strong trend momentum
+                if trend_data['strong_bullish_trend']:
+                    confirmations.append(0.1)
+                
+                # EMA slope confirmation
+                if trend_data['ema_fast_slope'] > 0.1 and trend_data['ema_slow_slope'] > 0.05:
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Buy", strength, analysis
+            
+            # BEARISH CROSSOVER SIGNAL
+            elif (fast_prev >= slow_prev and fast_current < slow_current and 
+                  ema_separation >= self.min_separation_pct):
+                
+                # Base strength from separation and trend alignment
+                base_strength = min(ema_separation * 3, 0.6)
+                
+                # Confirmation factors
+                confirmations = []
+                
+                # Price below fast EMA (momentum confirmation)
+                if current_price < fast_current:
+                    confirmations.append(0.15)
+                
+                # Long-term trend alignment
+                if current_price < trend_current:
+                    confirmations.append(0.2)
+                
+                # Trend persistence
+                if trend_data['bearish_persistence'] >= self.min_trend_persistence:
+                    confirmations.append(0.15)
+                
+                # Volume confirmation
+                if volume_data['volume_surge']:
+                    confirmations.append(0.2)
+                
+                # Strong trend momentum
+                if trend_data['strong_bearish_trend']:
+                    confirmations.append(0.1)
+                
+                # EMA slope confirmation
+                if trend_data['ema_fast_slope'] < -0.1 and trend_data['ema_slow_slope'] < -0.05:
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Sell", strength, analysis
+            
+            return "Hold", 0.0, analysis
+            
+        except Exception as e:
+            self.logger.error(f"❌ EMA signal generation error: {e}")
+            return "Hold", 0.0, {}
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get EMA-specific strategy information"""
+        base_info = self.get_strategy_info()
+        
+        ema_info = {
+            'ema_fast_period': self.ema_fast_period,
+            'ema_slow_period': self.ema_slow_period,
+            'ema_trend_period': self.ema_trend_period,
+            'min_separation_pct': self.min_separation_pct,
+            'trend_strength_periods': self.trend_strength_periods,
+            'min_trend_persistence': self.min_trend_persistence,
+            'strong_trend_threshold': self.strong_trend_threshold
+        }
+        
+        return {**base_info, 'ema_config': ema_info}
+
+# Usage example:
+"""
+# Initialize EMA strategy with swing config
+strategy_configs = get_strategy_configs()
+ema_strategy = EMAStrategy(
+    config=strategy_configs[StrategyType.EMA_CROSS],
+    session=bybit_session,
+    market_data=ta_engine,
+    logger=logger
+)
+
+# In your scanner loop:
+signal_result = await ema_strategy.analyze_symbol("BTCUSDT")
+if signal_result and signal_result[0] in ['Buy', 'Sell']:
+    # Execute swing trade with trailing stop
+    if signal_result[1] >= 0.65:  # EMA confidence threshold
+        # Place order logic here
+"""
+
+# =====================================
+# STRATEGY 3: ULTRA SCALPING STRATEGY
+# =====================================
+
+class ScalpingStrategy(BaseStrategy):
+    """
+    Ultra Scalping Strategy for HF Trading
+    Optimized for 120 trades/day with micro-timeframe analysis
+    """
+    
+    def __init__(self, config: StrategyConfig, session, market_data, logger):
+        super().__init__(StrategyType.SCALPING, config, session, market_data, logger)
+        
+        # Ultra-scalping parameters
+        self.momentum_periods = [3, 5, 8]  # Multiple momentum timeframes
+        self.volume_lookback = 20          # Volume analysis periods
+        self.min_momentum_pct = 0.15       # 0.15% minimum move (tighter than 0.2%)
+        self.strong_momentum_pct = 0.3     # 0.3% for strong signals
+        
+        # Volume thresholds for ultra-liquid scalping
+        self.min_volume_ratio = 1.8        # Minimum volume spike (higher than 1.5)
+        self.strong_volume_ratio = 2.5     # Strong volume confirmation
+        self.volume_consistency_periods = 10  # Recent volume consistency
+        
+        # Price action parameters
+        self.tick_analysis_periods = 8     # Tick-level analysis
+        self.momentum_acceleration_factor = 1.5  # Acceleration detection
+        self.liquidity_threshold = 0.95    # Market liquidity requirement
+        
+        # Rapid exit criteria
+#         self.quick_profit_target = 0.08    # 0.08% quick profit
+        self.momentum_decay_threshold = 0.5  # Exit when momentum decays 50%
+        
+    def calculate_multi_timeframe_momentum(self, df: pd.DataFrame) -> Dict:
+        """Calculate momentum across multiple micro-timeframes"""
+        try:
+            momentum_data = {}
+            current_price = df['close'].iloc[-1]
+            
+            for period in self.momentum_periods:
+                if len(df) >= period + 1:
+                    past_price = df['close'].iloc[-(period + 1)]
+                    momentum_pct = (current_price - past_price) / past_price * 100
+                    
+                    momentum_data[f'momentum_{period}'] = momentum_pct
+                    momentum_data[f'strong_{period}'] = abs(momentum_pct) >= self.strong_momentum_pct
+            
+            # Momentum acceleration (faster timeframes stronger than slower)
+            momentum_acceleration = 0
+            if len(self.momentum_periods) >= 2:
+                fast_momentum = momentum_data.get(f'momentum_{self.momentum_periods[0]}', 0)
+                slow_momentum = momentum_data.get(f'momentum_{self.momentum_periods[-1]}', 0)
+                
+                if fast_momentum != 0 and slow_momentum != 0:
+                    momentum_acceleration = abs(fast_momentum) / max(abs(slow_momentum), 0.01)
+            
+            # Overall momentum strength
+            momentum_values = [momentum_data.get(f'momentum_{p}', 0) for p in self.momentum_periods]
+            avg_momentum = sum(momentum_values) / len(momentum_values) if momentum_values else 0
+            momentum_consistency = len([m for m in momentum_values if m * avg_momentum > 0]) / len(momentum_values)
+            
+            return {
+                **momentum_data,
+                'avg_momentum': avg_momentum,
+                'momentum_acceleration': momentum_acceleration,
+                'momentum_consistency': momentum_consistency,
+                'strong_momentum': abs(avg_momentum) >= self.min_momentum_pct,
+                'accelerating': momentum_acceleration >= self.momentum_acceleration_factor
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Multi-timeframe momentum calculation error: {e}")
+            return {'strong_momentum': False, 'avg_momentum': 0}
+    
+    def calculate_volume_profile_scalping(self, df: pd.DataFrame) -> Dict:
+        """Enhanced volume analysis for ultra-scalping"""
+        try:
+            current_volume = df['volume'].iloc[-1]
+            
+            # Multiple volume benchmarks
+            recent_volumes = df['volume'].tail(self.volume_lookback)
+            avg_volume = recent_volumes.mean()
+            median_volume = recent_volumes.median()
+            max_recent_volume = recent_volumes.max()
+            
+            # Volume ratios
+            volume_ratio_avg = current_volume / avg_volume if avg_volume > 0 else 1.0
+            volume_ratio_median = current_volume / median_volume if median_volume > 0 else 1.0
+            
+            # Volume surge classification
+            volume_surge = volume_ratio_avg >= self.min_volume_ratio
+            strong_volume_surge = volume_ratio_avg >= self.strong_volume_ratio
+            extreme_volume = current_volume >= max_recent_volume * 0.9  # Within 10% of recent max
+            
+            # Volume consistency (institutional interest)
+            consistency_volumes = df['volume'].tail(self.volume_consistency_periods)
+            high_volume_count = sum(1 for v in consistency_volumes if v > avg_volume)
+            volume_consistency = high_volume_count / len(consistency_volumes)
+            
+            # Volume trend (accelerating vs decelerating)
+            if len(recent_volumes) >= 5:
+                recent_5 = recent_volumes.tail(5)
+                volume_trend = (recent_5.iloc[-1] - recent_5.iloc[0]) / recent_5.iloc[0]
+            else:
+                volume_trend = 0
+            
+            # Price-volume relationship
+            price_change = (df['close'].iloc[-1] - df['close'].iloc[-2]) / df['close'].iloc[-2]
+            volume_change = (current_volume - df['volume'].iloc[-2]) / df['volume'].iloc[-2]
+            pv_correlation = 1 if (price_change > 0 and volume_change > 0) or (price_change < 0 and volume_change > 0) else 0.5
+            
+            return {
+                'volume_ratio_avg': volume_ratio_avg,
+                'volume_ratio_median': volume_ratio_median,
+                'volume_surge': volume_surge,
+                'strong_volume_surge': strong_volume_surge,
+                'extreme_volume': extreme_volume,
+                'volume_consistency': volume_consistency,
+                'volume_trend': volume_trend,
+                'pv_correlation': pv_correlation,
+                'institutional_interest': volume_consistency > 0.6 and volume_surge
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Volume profile calculation error: {e}")
+            return {'volume_surge': False, 'volume_ratio_avg': 1.0}
+    
+    def calculate_price_action_scalping(self, df: pd.DataFrame) -> Dict:
+        """Micro price action analysis for scalping"""
+        try:
+            # Recent candle analysis
+            recent_candles = df.tail(self.tick_analysis_periods)
+            
+            # Candle body and wick analysis
+            current_candle = df.iloc[-1]
+            body_size = abs(current_candle['close'] - current_candle['open'])
+            total_range = current_candle['high'] - current_candle['low']
+            body_ratio = body_size / total_range if total_range > 0 else 0
+            
+            # Direction consistency
+            bullish_candles = sum(1 for _, candle in recent_candles.iterrows() 
+                                if candle['close'] > candle['open'])
+            bearish_candles = len(recent_candles) - bullish_candles
+            
+            direction_consistency = max(bullish_candles, bearish_candles) / len(recent_candles)
+            dominant_direction = 'bullish' if bullish_candles > bearish_candles else 'bearish'
+            
+            # Price rejection analysis (wicks)
+            upper_wick = current_candle['high'] - max(current_candle['open'], current_candle['close'])
+            lower_wick = min(current_candle['open'], current_candle['close']) - current_candle['low']
+            upper_wick_ratio = upper_wick / total_range if total_range > 0 else 0
+            lower_wick_ratio = lower_wick / total_range if total_range > 0 else 0
+            
+            # Support/resistance test
+            rejection_at_high = upper_wick_ratio > 0.4  # Strong rejection at highs
+            rejection_at_low = lower_wick_ratio > 0.4   # Strong rejection at lows
+            
+            # Momentum continuation patterns
+            momentum_candle = body_ratio > 0.6  # Strong directional candle
+            inside_bar = (current_candle['high'] <= df.iloc[-2]['high'] and 
+                         current_candle['low'] >= df.iloc[-2]['low'])
+            
+            return {
+                'body_ratio': body_ratio,
+                'direction_consistency': direction_consistency,
+                'dominant_direction': dominant_direction,
+                'momentum_candle': momentum_candle,
+                'rejection_at_high': rejection_at_high,
+                'rejection_at_low': rejection_at_low,
+                'inside_bar': inside_bar,
+                'bullish_candles': bullish_candles,
+                'bearish_candles': bearish_candles
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Price action analysis error: {e}")
+            return {'momentum_candle': False, 'direction_consistency': 0.5}
+    
+    def calculate_market_liquidity(self, df: pd.DataFrame) -> Dict:
+        """Estimate market liquidity conditions"""
+        try:
+            # Volatility-based liquidity estimate
+            recent_prices = df['close'].tail(10)
+            price_volatility = recent_prices.std() / recent_prices.mean()
+            
+            # Volume-price impact analysis
+            recent_data = df.tail(10)
+            volume_weighted_price_change = 0
+            
+            for i in range(1, len(recent_data)):
+                price_change = abs(recent_data.iloc[i]['close'] - recent_data.iloc[i-1]['close'])
+                volume = recent_data.iloc[i]['volume']
+                if volume > 0:
+                    volume_weighted_price_change += price_change / volume
+            
+            # Estimate liquidity (lower impact = higher liquidity)
+            liquidity_score = 1 / (1 + volume_weighted_price_change * 1000)  # Normalize
+            liquidity_adequate = liquidity_score >= self.liquidity_threshold
+            
+            return {
+                'liquidity_score': liquidity_score,
+                'liquidity_adequate': liquidity_adequate,
+                'price_volatility': price_volatility,
+                'volume_weighted_impact': volume_weighted_price_change
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Liquidity calculation error: {e}")
+            return {'liquidity_adequate': True, 'liquidity_score': 1.0}
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """
+        Ultra Scalping Signal Generation
+        Optimized for 120 high-frequency trades per day
+        """
+        try:
+            if len(df) < 15:  # Need minimum data for scalping analysis
+                return "Hold", 0.0, {}
+            
+            # Multi-component analysis
+            momentum_data = self.calculate_multi_timeframe_momentum(df)
+            volume_data = self.calculate_volume_profile_scalping(df)
+            price_action_data = self.calculate_price_action_scalping(df)
+            liquidity_data = self.calculate_market_liquidity(df)
+            
+            # Skip if liquidity is inadequate
+            if not liquidity_data['liquidity_adequate']:
+                return "Hold", 0.0, {}
+            
+            # Compile analysis data
+            analysis = {
+                'avg_momentum': momentum_data['avg_momentum'],
+                'momentum_acceleration': momentum_data['momentum_acceleration'],
+                'volume_surge': volume_data['volume_surge'],
+                'strong_volume_surge': volume_data['strong_volume_surge'],
+                'momentum_candle': price_action_data['momentum_candle'],
+                'direction_consistency': price_action_data['direction_consistency'],
+                'liquidity_score': liquidity_data['liquidity_score'],
+                'price': df['close'].iloc[-1]
+            }
+            
+            # BULLISH SCALPING SIGNALS
+            if (momentum_data['avg_momentum'] > self.min_momentum_pct and 
+                volume_data['volume_surge'] and
+                momentum_data['strong_momentum']):
+                
+                # Base strength from momentum and volume
+                base_strength = min(momentum_data['avg_momentum'] * 2, 0.5)
+                
+                # Scalping confirmations
+                confirmations = []
+                
+                # Strong volume surge
+                if volume_data['strong_volume_surge']:
+                    confirmations.append(0.25)
+                elif volume_data['volume_surge']:
+                    confirmations.append(0.15)
+                
+                # Momentum acceleration
+                if momentum_data['accelerating']:
+                    confirmations.append(0.2)
+                
+                # Price action confirmation
+                if price_action_data['momentum_candle']:
+                    confirmations.append(0.15)
+                
+                # Direction consistency
+                if (price_action_data['direction_consistency'] > 0.7 and 
+                    price_action_data['dominant_direction'] == 'bullish'):
+                    confirmations.append(0.1)
+                
+                # Institutional interest
+                if volume_data['institutional_interest']:
+                    confirmations.append(0.1)
+                
+                # High liquidity bonus
+                if liquidity_data['liquidity_score'] > 0.98:
+                    confirmations.append(0.05)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Buy", strength, analysis
+            
+            # BEARISH SCALPING SIGNALS
+            elif (momentum_data['avg_momentum'] < -self.min_momentum_pct and 
+                  volume_data['volume_surge'] and
+                  momentum_data['strong_momentum']):
+                
+                # Base strength from momentum and volume
+                base_strength = min(abs(momentum_data['avg_momentum']) * 2, 0.5)
+                
+                # Scalping confirmations
+                confirmations = []
+                
+                # Strong volume surge
+                if volume_data['strong_volume_surge']:
+                    confirmations.append(0.25)
+                elif volume_data['volume_surge']:
+                    confirmations.append(0.15)
+                
+                # Momentum acceleration
+                if momentum_data['accelerating']:
+                    confirmations.append(0.2)
+                
+                # Price action confirmation
+                if price_action_data['momentum_candle']:
+                    confirmations.append(0.15)
+                
+                # Direction consistency
+                if (price_action_data['direction_consistency'] > 0.7 and 
+                    price_action_data['dominant_direction'] == 'bearish'):
+                    confirmations.append(0.1)
+                
+                # Institutional interest
+                if volume_data['institutional_interest']:
+                    confirmations.append(0.1)
+                
+                # High liquidity bonus
+                if liquidity_data['liquidity_score'] > 0.98:
+                    confirmations.append(0.05)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Sell", strength, analysis
+            
+            return "Hold", 0.0, analysis
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ultra scalping signal generation error: {e}")
+            return "Hold", 0.0, {}
+    
+    def should_quick_exit(self, entry_price: float, current_price: float, side: str) -> Tuple[bool, str]:
+        """Determine if position should be quickly exited (scalping-specific)"""
+        try:
+            if side == "Buy":
+                profit_pct = (current_price - entry_price) / entry_price * 100
+            else:
+                profit_pct = (entry_price - current_price) / entry_price * 100
+            
+            # Quick profit target hit
+#             if profit_pct >= self.quick_profit_target:
+                return True, f"Quick profit target hit: {profit_pct:.3f}%"
+            
+            # Additional exit logic could be added here
+            # - Momentum decay detection
+            # - Volume drying up
+            # - Adverse price action
+            
+            return False, ""
+            
+        except Exception as e:
+            self.logger.error(f"Quick exit calculation error: {e}")
+            return False, ""
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get scalping-specific strategy information"""
+        base_info = self.get_strategy_info()
+        
+        scalping_info = {
+            'momentum_periods': self.momentum_periods,
+            'min_momentum_pct': self.min_momentum_pct,
+            'strong_momentum_pct': self.strong_momentum_pct,
+            'min_volume_ratio': self.min_volume_ratio,
+            'strong_volume_ratio': self.strong_volume_ratio,
+#             'quick_profit_target': self.quick_profit_target,
+            'liquidity_threshold': self.liquidity_threshold
+        }
+        
+        return {**base_info, 'scalping_config': scalping_info}
+
+# Usage example:
+"""
+# Initialize Ultra Scalping strategy
+strategy_configs = get_strategy_configs()
+scalping_strategy = ScalpingStrategy(
+    config=strategy_configs[StrategyType.SCALPING],
+    session=bybit_session,
+    market_data=ta_engine,
+    logger=logger
+)
+
+# In your ultra-fast scanner loop:
+signal_result = await scalping_strategy.analyze_symbol("BTCUSDT")
+if signal_result and signal_result[0] in ['Buy', 'Sell']:
+    # Execute scalp trade with tight trailing stop
+    if signal_result[1] >= 0.8:  # High confidence for scalping
+        # Place ultra-fast order with 0.08% profit target
+"""
+
+# =====================================
+# STRATEGY 4: MACD MOMENTUM STRATEGY
+# =====================================
+
+class MACDStrategy(BaseStrategy):
+    """
+    Enhanced MACD Momentum Strategy for HF Trading
+    Optimized for 30 trades/day with trend and divergence analysis
+    """
+    
+    def __init__(self, config: StrategyConfig, session, market_data, logger):
+        super().__init__(StrategyType.MACD_MOMENTUM, config, session, market_data, logger)
+        
+        # MACD parameters
+        self.macd_fast = 12
+        self.macd_slow = 26
+        self.macd_signal = 9
+        
+        # Momentum analysis parameters
+        self.trend_periods = 50            # Longer-term trend context
+        self.momentum_confirmation_periods = 20  # Momentum persistence
+        self.divergence_lookback = 15      # Divergence detection periods
+        self.volume_confirmation_periods = 15    # Volume momentum analysis
+        
+        # Signal strength thresholds
+        self.min_histogram_strength = 0.001    # Minimum histogram value
+        self.strong_histogram_strength = 0.005  # Strong momentum threshold
+        self.trend_alignment_threshold = 0.002  # MACD-trend alignment
+        
+        # Momentum persistence requirements
+        self.min_momentum_persistence = 0.6     # 60% of recent periods must align
+        self.strong_momentum_persistence = 0.8  # 80% for strong signals
+        
+    def calculate_macd(self, prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict:
+        """Calculate MACD indicator components"""
+        try:
+            # Calculate EMAs
+            ema_fast = prices.ewm(span=fast).mean()
+            ema_slow = prices.ewm(span=slow).mean()
+            
+            # MACD line
+            macd_line = ema_fast - ema_slow
+            
+            # Signal line
+            signal_line = macd_line.ewm(span=signal).mean()
+            
+            # Histogram
+            histogram = macd_line - signal_line
+            
+            return {
+                'macd': macd_line,
+                'signal': signal_line,
+                'histogram': histogram,
+                'ema_fast': ema_fast,
+                'ema_slow': ema_slow
+            }
+            
+        except Exception as e:
+            self.logger.error(f"MACD calculation error: {e}")
+            # Return neutral values
+            neutral_series = pd.Series([0] * len(prices))
+            return {
+                'macd': neutral_series,
+                'signal': neutral_series,
+                'histogram': neutral_series,
+                'ema_fast': prices.rolling(window=fast).mean(),
+                'ema_slow': prices.rolling(window=slow).mean()
+            }
+    
+    def detect_price_macd_divergence(self, df: pd.DataFrame, macd_data: Dict) -> Dict:
+        """Detect bullish/bearish divergences between price and MACD"""
+        try:
+            lookback = min(self.divergence_lookback, len(df))
+            recent_prices = df['close'].tail(lookback)
+            recent_macd = macd_data['macd'].tail(lookback)
+            recent_histogram = macd_data['histogram'].tail(lookback)
+            
+            # Find recent highs/lows
+            price_highs = []
+            macd_highs = []
+            price_lows = []
+            macd_lows = []
+            
+            # Simple peak/trough detection
+            for i in range(2, len(recent_prices) - 2):
+                # Price and MACD highs
+                if (recent_prices.iloc[i] > recent_prices.iloc[i-1] and 
+                    recent_prices.iloc[i] > recent_prices.iloc[i+1] and
+                    recent_prices.iloc[i] > recent_prices.iloc[i-2]):
+                    price_highs.append((i, recent_prices.iloc[i]))
+                    macd_highs.append((i, recent_macd.iloc[i]))
+                
+                # Price and MACD lows
+                if (recent_prices.iloc[i] < recent_prices.iloc[i-1] and 
+                    recent_prices.iloc[i] < recent_prices.iloc[i+1] and
+                    recent_prices.iloc[i] < recent_prices.iloc[i-2]):
+                    price_lows.append((i, recent_prices.iloc[i]))
+                    macd_lows.append((i, recent_macd.iloc[i]))
+            
+            # Detect divergences
+            bullish_divergence = False
+            bearish_divergence = False
+            
+            # Bullish divergence: price makes lower lows, MACD makes higher lows
+            if len(price_lows) >= 2 and len(macd_lows) >= 2:
+                latest_price_low = price_lows[-1][1]
+                prev_price_low = price_lows[-2][1]
+                latest_macd_low = macd_lows[-1][1]
+                prev_macd_low = macd_lows[-2][1]
+                
+                if latest_price_low < prev_price_low and latest_macd_low > prev_macd_low:
+                    bullish_divergence = True
+            
+            # Bearish divergence: price makes higher highs, MACD makes lower highs
+            if len(price_highs) >= 2 and len(macd_highs) >= 2:
+                latest_price_high = price_highs[-1][1]
+                prev_price_high = price_highs[-2][1]
+                latest_macd_high = macd_highs[-1][1]
+                prev_macd_high = macd_highs[-2][1]
+                
+                if latest_price_high > prev_price_high and latest_macd_high < prev_macd_high:
+                    bearish_divergence = True
+            
+            return {
+                'bullish_divergence': bullish_divergence,
+                'bearish_divergence': bearish_divergence,
+                'price_highs_count': len(price_highs),
+                'price_lows_count': len(price_lows),
+                'divergence_strength': 0.3 if bullish_divergence or bearish_divergence else 0
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Divergence detection error: {e}")
+            return {'bullish_divergence': False, 'bearish_divergence': False, 'divergence_strength': 0}
+    
+    def calculate_momentum_persistence(self, macd_data: Dict) -> Dict:
+        """Analyze MACD momentum persistence and strength"""
+        try:
+            lookback = min(self.momentum_confirmation_periods, len(macd_data['histogram']))
+            recent_histogram = macd_data['histogram'].tail(lookback)
+            recent_macd = macd_data['macd'].tail(lookback)
+            recent_signal = macd_data['signal'].tail(lookback)
+            
+            # Momentum direction consistency
+            bullish_periods = sum(1 for h in recent_histogram if h > 0)
+            bearish_periods = len(recent_histogram) - bullish_periods
+            
+            bullish_persistence = bullish_periods / len(recent_histogram)
+            bearish_persistence = bearish_periods / len(recent_histogram)
+            
+            # MACD line momentum
+            macd_above_signal = sum(1 for i in range(len(recent_macd)) 
+                                  if recent_macd.iloc[i] > recent_signal.iloc[i])
+            macd_momentum_bullish = macd_above_signal / len(recent_macd)
+            
+            # Histogram strength trend
+            if len(recent_histogram) >= 5:
+                early_hist = recent_histogram.iloc[:5].mean()
+                late_hist = recent_histogram.iloc[-5:].mean()
+                histogram_trend = (late_hist - early_hist) / max(abs(early_hist), 0.001)
+            else:
+                histogram_trend = 0
+            
+            # Overall momentum assessment
+            strong_bullish_momentum = (bullish_persistence >= self.strong_momentum_persistence and 
+                                     macd_momentum_bullish > 0.7)
+            strong_bearish_momentum = (bearish_persistence >= self.strong_momentum_persistence and 
+                                     macd_momentum_bullish < 0.3)
+            
+            return {
+                'bullish_persistence': bullish_persistence,
+                'bearish_persistence': bearish_persistence,
+                'macd_momentum_bullish': macd_momentum_bullish,
+                'histogram_trend': histogram_trend,
+                'strong_bullish_momentum': strong_bullish_momentum,
+                'strong_bearish_momentum': strong_bearish_momentum,
+                'momentum_consistent': max(bullish_persistence, bearish_persistence) >= self.min_momentum_persistence
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Momentum persistence calculation error: {e}")
+            return {'momentum_consistent': False, 'bullish_persistence': 0.5}
+    
+    def calculate_trend_context(self, df: pd.DataFrame, macd_data: Dict) -> Dict:
+        """Analyze longer-term trend context for MACD signals"""
+        try:
+            # Longer-term trend analysis
+            if len(df) >= self.trend_periods:
+                trend_prices = df['close'].tail(self.trend_periods)
+                trend_start = trend_prices.iloc[0]
+                trend_end = trend_prices.iloc[-1]
+                overall_trend = (trend_end - trend_start) / trend_start * 100
+                
+                # Trend strength via linear regression
+                x = range(len(trend_prices))
+                y = trend_prices.values
+                
+                # Simple linear regression
+                n = len(x)
+                sum_x = sum(x)
+                sum_y = sum(y)
+                sum_xy = sum(x[i] * y[i] for i in range(n))
+                sum_x2 = sum(x[i] ** 2 for i in range(n))
+                
+                slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
+                trend_strength = abs(slope) / trend_end * 100  # Normalize
+                
+            else:
+                overall_trend = 0
+                trend_strength = 0
+            
+            # MACD-Trend alignment
+            current_macd = macd_data['macd'].iloc[-1]
+            trend_bullish = overall_trend > 0.5  # 0.5% minimum trend
+            trend_bearish = overall_trend < -0.5
+            
+            macd_trend_alignment = False
+            if trend_bullish and current_macd > 0:
+                macd_trend_alignment = True
+            elif trend_bearish and current_macd < 0:
+                macd_trend_alignment = True
+            
+            return {
+                'overall_trend': overall_trend,
+                'trend_strength': trend_strength,
+                'trend_bullish': trend_bullish,
+                'trend_bearish': trend_bearish,
+                'macd_trend_alignment': macd_trend_alignment,
+                'strong_trend': abs(overall_trend) > 2.0  # 2% minimum for strong trend
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Trend context calculation error: {e}")
+            return {'overall_trend': 0, 'macd_trend_alignment': False}
+    
+    def calculate_volume_momentum(self, df: pd.DataFrame) -> Dict:
+        """Calculate volume confirmation for momentum signals"""
+        try:
+            lookback = min(self.volume_confirmation_periods, len(df))
+            recent_data = df.tail(lookback)
+            
+            current_volume = df['volume'].iloc[-1]
+            avg_volume = recent_data['volume'].mean()
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+            
+            # Volume trend
+            if len(recent_data) >= 5:
+                early_volume = recent_data['volume'].iloc[:5].mean()
+                late_volume = recent_data['volume'].iloc[-5:].mean()
+                volume_trend = (late_volume - early_volume) / early_volume if early_volume > 0 else 0
+            else:
+                volume_trend = 0
+            
+            # Price-volume relationship for momentum
+            price_changes = recent_data['close'].pct_change().dropna()
+            volume_changes = recent_data['volume'].pct_change().dropna()
+            
+            if len(price_changes) > 5 and len(volume_changes) > 5:
+                # Correlation between price and volume changes
+                pv_correlation = price_changes.corr(volume_changes)
+            else:
+                pv_correlation = 0
+            
+            volume_confirmation = (volume_ratio > 1.2 and volume_trend > 0.1) or pv_correlation > 0.3
+            
+            return {
+                'volume_ratio': volume_ratio,
+                'volume_trend': volume_trend,
+                'pv_correlation': pv_correlation,
+                'volume_confirmation': volume_confirmation,
+                'strong_volume': volume_ratio > 1.5 and volume_trend > 0.2
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Volume momentum calculation error: {e}")
+            return {'volume_confirmation': False, 'volume_ratio': 1.0}
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """
+        Enhanced MACD Momentum Signal Generation
+        Combines histogram, divergence, trend context, and volume
+        """
+        try:
+            if len(df) < 60:  # Need enough data for reliable MACD analysis
+                return "Hold", 0.0, {}
+            
+            # Calculate MACD components
+            macd_data = self.calculate_macd(df['close'], self.macd_fast, self.macd_slow, self.macd_signal)
+            
+            current_macd = macd_data['macd'].iloc[-1]
+            current_signal = macd_data['signal'].iloc[-1]
+            current_histogram = macd_data['histogram'].iloc[-1]
+            prev_histogram = macd_data['histogram'].iloc[-2]
+            
+            # Advanced analysis
+            divergence_data = self.detect_price_macd_divergence(df, macd_data)
+            momentum_data = self.calculate_momentum_persistence(macd_data)
+            trend_data = self.calculate_trend_context(df, macd_data)
+            volume_data = self.calculate_volume_momentum(df)
+            
+            # Compile analysis data
+            analysis = {
+                'macd': current_macd,
+                'signal': current_signal,
+                'histogram': current_histogram,
+                'hist_change': current_histogram - prev_histogram,
+                'bullish_divergence': divergence_data['bullish_divergence'],
+                'bearish_divergence': divergence_data['bearish_divergence'],
+                'momentum_persistent': momentum_data['momentum_consistent'],
+                'trend_aligned': trend_data['macd_trend_alignment'],
+                'volume_confirmed': volume_data['volume_confirmation'],
+                'price': df['close'].iloc[-1]
+            }
+            
+            # BULLISH MACD MOMENTUM SIGNALS
+            if (prev_histogram <= 0 and current_histogram > self.min_histogram_strength and 
+                current_macd > current_signal):
+                
+                # Base strength from histogram magnitude and change
+                histogram_strength = min(abs(current_histogram) * 200, 0.5)
+                change_strength = min(abs(current_histogram - prev_histogram) * 100, 0.3)
+                base_strength = histogram_strength + change_strength
+                
+                # Momentum confirmations
+                confirmations = []
+                
+                # Strong histogram value
+                if abs(current_histogram) >= self.strong_histogram_strength:
+                    confirmations.append(0.2)
+                
+                # Bullish divergence detected
+                if divergence_data['bullish_divergence']:
+                    confirmations.append(0.25)
+                
+                # Momentum persistence
+                if momentum_data['strong_bullish_momentum']:
+                    confirmations.append(0.15)
+                elif momentum_data['momentum_consistent']:
+                    confirmations.append(0.1)
+                
+                # Trend alignment
+                if trend_data['macd_trend_alignment'] and trend_data['trend_bullish']:
+                    confirmations.append(0.15)
+                
+                # Volume confirmation
+                if volume_data['strong_volume']:
+                    confirmations.append(0.15)
+                elif volume_data['volume_confirmation']:
+                    confirmations.append(0.1)
+                
+                # Strong overall trend
+                if trend_data['strong_trend'] and trend_data['trend_bullish']:
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Buy", strength, analysis
+            
+            # BEARISH MACD MOMENTUM SIGNALS
+            elif (prev_histogram >= 0 and current_histogram < -self.min_histogram_strength and 
+                  current_macd < current_signal):
+                
+                # Base strength from histogram magnitude and change
+                histogram_strength = min(abs(current_histogram) * 200, 0.5)
+                change_strength = min(abs(current_histogram - prev_histogram) * 100, 0.3)
+                base_strength = histogram_strength + change_strength
+                
+                # Momentum confirmations
+                confirmations = []
+                
+                # Strong histogram value
+                if abs(current_histogram) >= self.strong_histogram_strength:
+                    confirmations.append(0.2)
+                
+                # Bearish divergence detected
+                if divergence_data['bearish_divergence']:
+                    confirmations.append(0.25)
+                
+                # Momentum persistence
+                if momentum_data['strong_bearish_momentum']:
+                    confirmations.append(0.15)
+                elif momentum_data['momentum_consistent']:
+                    confirmations.append(0.1)
+                
+                # Trend alignment
+                if trend_data['macd_trend_alignment'] and trend_data['trend_bearish']:
+                    confirmations.append(0.15)
+                
+                # Volume confirmation
+                if volume_data['strong_volume']:
+                    confirmations.append(0.15)
+                elif volume_data['volume_confirmation']:
+                    confirmations.append(0.1)
+                
+                # Strong overall trend
+                if trend_data['strong_trend'] and trend_data['trend_bearish']:
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Sell", strength, analysis
+            
+            return "Hold", 0.0, analysis
+            
+        except Exception as e:
+            self.logger.error(f"❌ MACD momentum signal generation error: {e}")
+            return "Hold", 0.0, {}
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get MACD-specific strategy information"""
+        base_info = self.get_strategy_info()
+        
+        macd_info = {
+            'macd_fast': self.macd_fast,
+            'macd_slow': self.macd_slow,
+            'macd_signal': self.macd_signal,
+            'trend_periods': self.trend_periods,
+            'divergence_lookback': self.divergence_lookback,
+            'min_histogram_strength': self.min_histogram_strength,
+            'strong_histogram_strength': self.strong_histogram_strength,
+            'min_momentum_persistence': self.min_momentum_persistence
+        }
+        
+        return {**base_info, 'macd_config': macd_info}
+
+# Usage example:
+"""
+# Initialize MACD Momentum strategy
+strategy_configs = get_strategy_configs()
+macd_strategy = MACDStrategy(
+    config=strategy_configs[StrategyType.MACD_MOMENTUM],
+    session=bybit_session,
+    market_data=ta_engine,
+    logger=logger
+)
+
+# In your scanner loop:
+signal_result = await macd_strategy.analyze_symbol("BTCUSDT")
+if signal_result and signal_result[0] in ['Buy', 'Sell']:
+    # Execute momentum trade with trailing stop
+    if signal_result[1] >= 0.7:  # MACD confidence threshold
+        # Place momentum trade with medium-term outlook
+"""
+
+# =====================================
+# STRATEGY 5: ENHANCED BREAKOUT STRATEGY
+# =====================================
+
+class BreakoutStrategy(BaseStrategy):
+    """
+    Enhanced Breakout Strategy for HF Trading
+    Optimized for 15 trades/day with false breakout protection
+    """
+    
+    def __init__(self, config: StrategyConfig, session, market_data, logger):
+        super().__init__(StrategyType.BREAKOUT, config, session, market_data, logger)
+        
+        # Bollinger Band parameters
+        self.bb_period = 20
+        self.bb_std_dev = 2.0
+        self.bb_squeeze_threshold = 0.015  # 1.5% width for squeeze detection
+        
+        # Consolidation detection parameters
+        self.consolidation_periods = 15    # Periods to check for consolidation
+        self.max_consolidation_range = 0.02  # 2% max range for consolidation
+        self.min_consolidation_periods = 8   # Minimum periods in consolidation
+        
+        # Breakout validation parameters
+        self.min_breakout_strength = 0.003   # 0.3% minimum breakout distance
+        self.strong_breakout_strength = 0.008  # 0.8% for strong breakouts
+        self.volume_surge_threshold = 2.5      # 2.5x volume for breakouts
+        self.momentum_confirmation_periods = 5  # Momentum confirmation
+        
+        # False breakout protection
+        self.support_resistance_periods = 50   # S/R level detection
+        self.false_breakout_threshold = 0.002  # 0.2% false breakout filter
+        self.retest_confirmation_periods = 3   # Periods to wait for retest
+        
+        # Market structure parameters
+        self.volatility_expansion_threshold = 1.5  # ATR expansion requirement
+        self.institutional_volume_threshold = 3.0  # 3x volume for institutional
+        
+    def calculate_bollinger_bands(self, prices: pd.Series, period: int = 20, std_dev: float = 2.0) -> Dict:
+        """Calculate Bollinger Bands with additional metrics"""
+        try:
+            # Calculate components
+            sma = prices.rolling(window=period).mean()
+            std = prices.rolling(window=period).std()
+            
+            upper_band = sma + (std * std_dev)
+            lower_band = sma - (std * std_dev)
+            
+            # BB width and position
+            bb_width = (upper_band - lower_band) / sma * 100  # Percentage width
+            bb_position = (prices - lower_band) / (upper_band - lower_band)  # 0-1 position
+            
+            # Squeeze detection (narrow bands)
+            bb_squeeze = bb_width < self.bb_squeeze_threshold * 100
+            
+            return {
+                'upper': upper_band,
+                'lower': lower_band,
+                'middle': sma,
+                'width': bb_width,
+                'position': bb_position,
+                'squeeze': bb_squeeze
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Bollinger Bands calculation error: {e}")
+            # Return neutral bands
+            return {
+                'upper': prices * 1.02,
+                'lower': prices * 0.98,
+                'middle': prices,
+                'width': pd.Series([2.0] * len(prices)),
+                'position': pd.Series([0.5] * len(prices)),
+                'squeeze': pd.Series([False] * len(prices))
+            }
+    
+    def detect_consolidation_pattern(self, df: pd.DataFrame) -> Dict:
+        """Detect consolidation patterns before breakouts"""
+        try:
+            lookback = min(self.consolidation_periods, len(df))
+            recent_data = df.tail(lookback)
+            
+            # Price range analysis
+            high_prices = recent_data['high']
+            low_prices = recent_data['low']
+            close_prices = recent_data['close']
+            
+            range_high = high_prices.max()
+            range_low = low_prices.min()
+            range_pct = (range_high - range_low) / range_low * 100
+            
+            # Consolidation criteria
+            is_consolidating = range_pct <= self.max_consolidation_range * 100
+            
+            # Count periods within consolidation range
+            consolidation_periods = 0
+            avg_price = (range_high + range_low) / 2
+            tolerance = avg_price * 0.01  # 1% tolerance
+            
+            for _, candle in recent_data.iterrows():
+                candle_range = candle['high'] - candle['low']
+                if candle_range <= tolerance * 2:  # Tight range candle
+                    consolidation_periods += 1
+            
+            consolidation_quality = consolidation_periods / len(recent_data)
+            strong_consolidation = (consolidation_periods >= self.min_consolidation_periods and 
+                                  is_consolidating)
+            
+            # Volume during consolidation (should be decreasing)
+            early_volume = recent_data['volume'].iloc[:5].mean()
+            late_volume = recent_data['volume'].iloc[-5:].mean()
+            volume_decline = (early_volume - late_volume) / early_volume if early_volume > 0 else 0
+            
+            return {
+                'is_consolidating': is_consolidating,
+                'consolidation_quality': consolidation_quality,
+                'strong_consolidation': strong_consolidation,
+                'range_pct': range_pct,
+                'consolidation_periods': consolidation_periods,
+                'volume_decline': volume_decline,
+                'range_high': range_high,
+                'range_low': range_low
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Consolidation detection error: {e}")
+            return {'is_consolidating': False, 'strong_consolidation': False}
+    
+    def detect_support_resistance_levels(self, df: pd.DataFrame) -> Dict:
+        """Detect key support and resistance levels"""
+        try:
+            lookback = min(self.support_resistance_periods, len(df))
+            recent_data = df.tail(lookback)
+            
+            # Find significant highs and lows
+            highs = []
+            lows = []
+            
+            for i in range(2, len(recent_data) - 2):
+                current_high = recent_data.iloc[i]['high']
+                current_low = recent_data.iloc[i]['low']
+                
+                # Local high detection
+                if (current_high > recent_data.iloc[i-1]['high'] and 
+                    current_high > recent_data.iloc[i+1]['high'] and
+                    current_high > recent_data.iloc[i-2]['high']):
+                    highs.append(current_high)
+                
+                # Local low detection
+                if (current_low < recent_data.iloc[i-1]['low'] and 
+                    current_low < recent_data.iloc[i+1]['low'] and
+                    current_low < recent_data.iloc[i-2]['low']):
+                    lows.append(current_low)
+            
+            # Current price context
+            current_price = df['close'].iloc[-1]
+            
+            # Find nearest support and resistance
+            resistance_levels = [h for h in highs if h > current_price]
+            support_levels = [l for l in lows if l < current_price]
+            
+            nearest_resistance = min(resistance_levels) if resistance_levels else current_price * 1.05
+            nearest_support = max(support_levels) if support_levels else current_price * 0.95
+            
+            # Distance to levels
+            resistance_distance = (nearest_resistance - current_price) / current_price * 100
+            support_distance = (current_price - nearest_support) / current_price * 100
+            
+            return {
+                'nearest_resistance': nearest_resistance,
+                'nearest_support': nearest_support,
+                'resistance_distance': resistance_distance,
+                'support_distance': support_distance,
+                'resistance_levels': resistance_levels,
+                'support_levels': support_levels,
+                'near_resistance': resistance_distance < 1.0,  # Within 1%
+                'near_support': support_distance < 1.0
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Support/Resistance detection error: {e}")
+            current_price = df['close'].iloc[-1]
+            return {
+                'nearest_resistance': current_price * 1.05,
+                'nearest_support': current_price * 0.95,
+                'near_resistance': False,
+                'near_support': False
+            }
+    
+    def calculate_breakout_quality(self, df: pd.DataFrame, bb_data: Dict, 
+                                 consolidation_data: Dict, sr_data: Dict) -> Dict:
+        """Calculate breakout quality and strength"""
+        try:
+            current_price = df['close'].iloc[-1]
+            current_volume = df['volume'].iloc[-1]
+            
+            # Volume analysis
+            recent_volumes = df['volume'].tail(20)
+            avg_volume = recent_volumes.mean()
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+            
+            # Momentum confirmation
+            momentum_data = df.tail(self.momentum_confirmation_periods)
+            price_momentum = (momentum_data['close'].iloc[-1] - momentum_data['close'].iloc[0]) / momentum_data['close'].iloc[0] * 100
+            
+            # ATR-based volatility expansion
+            if len(df) >= 14:
+                atr_current = self.calculate_atr(df, 14).iloc[-1]
+                atr_previous = self.calculate_atr(df, 14).iloc[-2]
+                volatility_expansion = atr_current / atr_previous if atr_previous > 0 else 1.0
+            else:
+                volatility_expansion = 1.0
+            
+            # Breakout distance from bands
+            upper_band = bb_data['upper'].iloc[-1]
+            lower_band = bb_data['lower'].iloc[-1]
+            
+            if current_price > upper_band:
+                breakout_distance = (current_price - upper_band) / upper_band * 100
+                breakout_type = 'bullish'
+            elif current_price < lower_band:
+                breakout_distance = (lower_band - current_price) / lower_band * 100
+                breakout_type = 'bearish'
+            else:
+                breakout_distance = 0
+                breakout_type = 'none'
+            
+            # Quality scoring
+            quality_score = 0
+            
+            # Volume surge (most important)
+            if volume_ratio >= self.institutional_volume_threshold:
+                quality_score += 0.3  # Institutional participation
+            elif volume_ratio >= self.volume_surge_threshold:
+                quality_score += 0.2  # Strong volume
+            
+            # Consolidation quality
+            if consolidation_data['strong_consolidation']:
+                quality_score += 0.25
+            elif consolidation_data['is_consolidating']:
+                quality_score += 0.15
+            
+            # Breakout strength
+            if breakout_distance >= self.strong_breakout_strength * 100:
+                quality_score += 0.2
+            elif breakout_distance >= self.min_breakout_strength * 100:
+                quality_score += 0.1
+            
+            # Volatility expansion
+            if volatility_expansion >= self.volatility_expansion_threshold:
+                quality_score += 0.15
+            
+            # Momentum confirmation
+            if abs(price_momentum) > 0.5:  # 0.5% momentum
+                quality_score += 0.1
+            
+            return {
+                'breakout_type': breakout_type,
+                'breakout_distance': breakout_distance,
+                'volume_ratio': volume_ratio,
+                'quality_score': quality_score,
+                'volatility_expansion': volatility_expansion,
+                'price_momentum': price_momentum,
+                'institutional_volume': volume_ratio >= self.institutional_volume_threshold,
+                'strong_breakout': breakout_distance >= self.strong_breakout_strength * 100
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Breakout quality calculation error: {e}")
+            return {'breakout_type': 'none', 'quality_score': 0}
+    
+    def calculate_atr(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
+        """Calculate Average True Range"""
+        try:
+            high = df['high']
+            low = df['low']
+            close = df['close'].shift(1)
+            
+            tr1 = high - low
+            tr2 = abs(high - close)
+            tr3 = abs(low - close)
+            
+            true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = true_range.rolling(window=period).mean()
+            
+            return atr
+            
+        except Exception as e:
+            self.logger.error(f"ATR calculation error: {e}")
+            return pd.Series([df['close'].iloc[-1] * 0.02] * len(df))  # 2% fallback
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """
+        Enhanced Breakout Signal Generation
+        Combines BB breakouts, consolidation, volume, and quality scoring
+        """
+        try:
+            if len(df) < 60:  # Need enough data for reliable breakout analysis
+                return "Hold", 0.0, {}
+            
+            # Calculate components
+            bb_data = self.calculate_bollinger_bands(df['close'], self.bb_period, self.bb_std_dev)
+            consolidation_data = self.detect_consolidation_pattern(df)
+            sr_data = self.detect_support_resistance_levels(df)
+            breakout_data = self.calculate_breakout_quality(df, bb_data, consolidation_data, sr_data)
+            
+            current_price = df['close'].iloc[-1]
+            upper_band = bb_data['upper'].iloc[-1]
+            lower_band = bb_data['lower'].iloc[-1]
+            
+            # Compile analysis data
+            analysis = {
+                'price': current_price,
+                'upper_band': upper_band,
+                'lower_band': lower_band,
+                'bb_width': bb_data['width'].iloc[-1],
+                'breakout_type': breakout_data['breakout_type'],
+                'breakout_distance': breakout_data['breakout_distance'],
+                'quality_score': breakout_data['quality_score'],
+                'volume_ratio': breakout_data['volume_ratio'],
+                'consolidation_quality': consolidation_data['consolidation_quality'],
+                'institutional_volume': breakout_data['institutional_volume']
+            }
+            
+            # Skip if near major support/resistance (false breakout risk)
+            if sr_data['near_resistance'] or sr_data['near_support']:
+                return "Hold", 0.0, analysis
+            
+            # BULLISH BREAKOUT SIGNALS
+            if (breakout_data['breakout_type'] == 'bullish' and 
+                breakout_data['breakout_distance'] >= self.min_breakout_strength * 100):
+                
+                # Base strength from breakout distance
+                base_strength = min(breakout_data['breakout_distance'] * 10, 0.5)
+                
+                # Quality confirmations
+                confirmations = []
+                
+                # Institutional volume
+                if breakout_data['institutional_volume']:
+                    confirmations.append(0.3)
+                elif breakout_data['volume_ratio'] >= self.volume_surge_threshold:
+                    confirmations.append(0.2)
+                
+                # Strong consolidation before breakout
+                if consolidation_data['strong_consolidation']:
+                    confirmations.append(0.2)
+                elif consolidation_data['is_consolidating']:
+                    confirmations.append(0.1)
+                
+                # Strong breakout distance
+                if breakout_data['strong_breakout']:
+                    confirmations.append(0.15)
+                
+                # Volatility expansion
+                if breakout_data['volatility_expansion'] >= self.volatility_expansion_threshold:
+                    confirmations.append(0.15)
+                
+                # Momentum confirmation
+                if breakout_data['price_momentum'] > 0.3:
+                    confirmations.append(0.1)
+                
+                # BB squeeze before breakout
+                if bb_data['squeeze'].iloc[-2]:  # Was in squeeze before breakout
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Buy", strength, analysis
+            
+            # BEARISH BREAKOUT SIGNALS
+            elif (breakout_data['breakout_type'] == 'bearish' and 
+                  breakout_data['breakout_distance'] >= self.min_breakout_strength * 100):
+                
+                # Base strength from breakout distance
+                base_strength = min(breakout_data['breakout_distance'] * 10, 0.5)
+                
+                # Quality confirmations
+                confirmations = []
+                
+                # Institutional volume
+                if breakout_data['institutional_volume']:
+                    confirmations.append(0.3)
+                elif breakout_data['volume_ratio'] >= self.volume_surge_threshold:
+                    confirmations.append(0.2)
+                
+                # Strong consolidation before breakout
+                if consolidation_data['strong_consolidation']:
+                    confirmations.append(0.2)
+                elif consolidation_data['is_consolidating']:
+                    confirmations.append(0.1)
+                
+                # Strong breakout distance
+                if breakout_data['strong_breakout']:
+                    confirmations.append(0.15)
+                
+                # Volatility expansion
+                if breakout_data['volatility_expansion'] >= self.volatility_expansion_threshold:
+                    confirmations.append(0.15)
+                
+                # Momentum confirmation
+                if breakout_data['price_momentum'] < -0.3:
+                    confirmations.append(0.1)
+                
+                # BB squeeze before breakout
+                if bb_data['squeeze'].iloc[-2]:  # Was in squeeze before breakout
+                    confirmations.append(0.1)
+                
+                strength = min(base_strength + sum(confirmations), 1.0)
+                
+                if strength >= self.config.min_confidence:
+                    return "Sell", strength, analysis
+            
+            return "Hold", 0.0, analysis
+            
+        except Exception as e:
+            self.logger.error(f"❌ Breakout signal generation error: {e}")
+            return "Hold", 0.0, {}
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get breakout-specific strategy information"""
+        base_info = self.get_strategy_info()
+        
+        breakout_info = {
+            'bb_period': self.bb_period,
+            'bb_std_dev': self.bb_std_dev,
+            'consolidation_periods': self.consolidation_periods,
+            'min_breakout_strength': self.min_breakout_strength,
+            'strong_breakout_strength': self.strong_breakout_strength,
+            'volume_surge_threshold': self.volume_surge_threshold,
+            'institutional_volume_threshold': self.institutional_volume_threshold,
+            'volatility_expansion_threshold': self.volatility_expansion_threshold
+        }
+        
+        return {**base_info, 'breakout_config': breakout_info}
+
+# =====================================
+# STRATEGY 6: HFQ-LITE VOLUME SPIKE
+# =====================================
+
+class VolumeSpikeStrategy(BaseStrategy):
+    """
+    HFQ-Lite Volume Spike Strategy
+    Professional quality selection with practical API trading
+    
+    Key Features:
+    - Analyzes 150+ opportunities daily, executes best 60
+    - Multi-tier volume spike detection (2x to 8x+)
+    - Institutional volume detection (5x+ spikes)
+    - Quality-based execution (70%+ minimum quality)
+    - API-friendly 5-second scanning compatible with main bot
+    """
+    
+    def __init__(self, config, session, market_data, logger):
+        super().__init__(StrategyType.VOLUME_SPIKE, config, session, market_data, logger)        
+        # HFQ-Lite Configuration
+        self.moderate_spike_ratio = 2.0      # 2.0x moderate spike
+        self.strong_spike_ratio = 3.0        # 3.0x strong spike  
+        self.institutional_spike_ratio = 5.0 # 5.0x institutional detection
+        self.extreme_spike_ratio = 8.0       # 8.0x extreme spike
+        
+        # Quality thresholds
+        self.min_quality_score = 0.70        # 70% minimum quality
+        self.excellent_quality = 0.85        # 85% excellent quality
+        self.elite_quality = 0.95            # 95% elite quality
+        
+        # Daily tracking
+        self.daily_trade_target = 150         # 60 high-quality trades per day
+        self.executed_trades_today = 0
+        self.daily_opportunities_analyzed = 0
+        self.opportunity_pool = deque(maxlen=150)
+        
+        # Quality statistics
+        self.quality_stats = {
+            'elite_count': 0,
+            'excellent_count': 0, 
+            'good_count': 0,
+            'total_quality_score': 0.0
+        }
+        
+        # Performance tracking
+        self.execution_times = deque(maxlen=50)
+        
+        logger.info(f"🎯 HFQ-Lite Volume Spike Strategy initialized")
+        logger.info(f"   Target: {self.daily_trade_target} high-quality trades/day")
+        logger.info(f"   Quality Threshold: {self.min_quality_score:.0%}+ minimum")
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """HFQ-Lite Volume Spike Strategy - Professional quality selection"""
+        start_time = time.time()
+        
+        try:
+            if len(df) < 20:
+                return "Hold", 0.0, {}
+            
+            # Quick pre-filtering to save computation
+            if not self._quick_volume_check(df):
+                return "Hold", 0.0, {}
+            
+            # Core Multi-Factor Analysis
+            volume_analysis = self._analyze_volume_spike(df)
+            rsi_analysis = self._analyze_rsi_context(df)
+            order_flow_analysis = self._analyze_order_flow(df)
+            trend_context = self._analyze_trend_context(df)
+            
+            # Opportunity Detection
+            opportunity = self._detect_trading_opportunity(
+                volume_analysis, rsi_analysis, order_flow_analysis, trend_context, df
+            )
+            
+            if not opportunity:
+                return "Hold", 0.0, {}
+            
+            # Quality Scoring (Multi-Factor)
+            quality_score = self._calculate_opportunity_quality(opportunity)
+            
+            if quality_score < self.min_quality_score:
+                return "Hold", 0.0, {}
+            
+            # Add to opportunity pool for selection
+            self._add_to_opportunity_pool(opportunity, quality_score)
+            self.daily_opportunities_analyzed += 1
+            
+            # Smart Execution Decision (Quality-Based Selection)
+            if self._should_execute_opportunity(quality_score):
+                signal_type, strength, analysis = self._generate_execution_signal(
+                    opportunity, quality_score
+                )
+                
+                # Track execution time
+                execution_time = (time.time() - start_time) * 1000
+                self.execution_times.append(execution_time)
+                
+                return signal_type, strength, analysis
+            
+            return "Hold", 0.0, {}
+            
+        except Exception as e:
+            self.logger.error(f"❌ HFQ-Lite Volume Spike error: {e}")
+            return "Hold", 0.0, {}
+    
+    def _quick_volume_check(self, df: pd.DataFrame) -> bool:
+        """Quick volume pre-filter to save computation"""
+        if len(df) < 5:
+            return False
+        
+        current_volume = df['volume'].iloc[-1]
+        recent_avg = df['volume'].tail(10).mean()
+        
+        # Only proceed if volume is at least 1.5x average
+        return current_volume > recent_avg * 1.5
+    
+    def _analyze_volume_spike(self, df: pd.DataFrame) -> Dict:
+        """Multi-Tier Volume Analysis with Institutional Detection"""
+        current_volume = df['volume'].iloc[-1]
+        
+        # Dynamic volume baseline (more robust than simple average)
+        recent_volume = df['volume'].tail(20)
+        volume_baseline = recent_volume.quantile(0.6)  # 60th percentile baseline
+        volume_std = recent_volume.std()
+        
+        # Volume ratio and z-score
+        volume_ratio = current_volume / max(volume_baseline, 1)
+        volume_z_score = (current_volume - recent_volume.mean()) / max(volume_std, 1)
+        
+        # Multi-Tier Classification
+        spike_level = "none"
+        spike_strength = 0.0
+        institutional_detected = False
+        
+        if volume_ratio >= self.extreme_spike_ratio:
+            spike_level = "extreme"
+            spike_strength = 1.0
+            institutional_detected = True
+        elif volume_ratio >= self.institutional_spike_ratio:
+            spike_level = "institutional"
+            spike_strength = 0.85
+            institutional_detected = True
+        elif volume_ratio >= self.strong_spike_ratio:
+            spike_level = "strong"
+            spike_strength = 0.70
+        elif volume_ratio >= self.moderate_spike_ratio:
+            spike_level = "moderate" 
+            spike_strength = 0.50
+        
+        # Volume momentum (trend in volume)
+        volume_momentum = 0.0
+        if len(recent_volume) >= 10:
+            early_avg = recent_volume.head(10).mean()
+            late_avg = recent_volume.tail(10).mean()
+            volume_momentum = (late_avg - early_avg) / max(early_avg, 1)
+        
+        return {
+            'volume_ratio': round(volume_ratio, 2),
+            'volume_z_score': round(volume_z_score, 2),
+            'spike_level': spike_level,
+            'spike_strength': spike_strength,
+            'institutional_detected': institutional_detected,
+            'volume_momentum': round(volume_momentum, 3),
+            'current_volume': current_volume,
+            'baseline_volume': volume_baseline
+        }
+    
+    def _analyze_rsi_context(self, df: pd.DataFrame) -> Dict:
+        """RSI Analysis with Context Classification"""
+        rsi = TechnicalAnalysis.calculate_rsi(df['close'], 14).iloc[-1]
+        
+        # RSI context classification
+        rsi_context = "neutral"
+        rsi_strength = 0.0
+        
+        if rsi <= 25:
+            rsi_context = "extreme_oversold"
+            rsi_strength = 1.0
+        elif rsi <= 35:
+            rsi_context = "strong_oversold"
+            rsi_strength = 0.8
+        elif rsi <= 45:
+            rsi_context = "moderate_oversold" 
+            rsi_strength = 0.6
+        elif rsi >= 75:
+            rsi_context = "extreme_overbought"
+            rsi_strength = 1.0
+        elif rsi >= 65:
+            rsi_context = "strong_overbought"
+            rsi_strength = 0.8
+        elif rsi >= 55:
+            rsi_context = "moderate_overbought"
+            rsi_strength = 0.6
+        
+        # RSI momentum (direction of RSI change)
+        rsi_series = TechnicalAnalysis.calculate_rsi(df['close'], 14)
+        rsi_momentum = 0.0
+        if len(rsi_series) >= 3:
+            rsi_momentum = rsi_series.iloc[-1] - rsi_series.iloc[-3]
+        
+        return {
+            'rsi': round(rsi, 1),
+            'rsi_context': rsi_context,
+            'rsi_strength': rsi_strength,
+            'rsi_momentum': round(rsi_momentum, 2)
+        }
+    
+    def _analyze_order_flow(self, df: pd.DataFrame) -> Dict:
+        """Order Flow Analysis - Buy vs Sell Pressure"""
+        if len(df) < 10:
+            return {'flow_direction': 'neutral', 'flow_strength': 0.0}
+        
+        recent_data = df.tail(10)
+        
+        # Volume-weighted price movements
+        total_buy_volume = 0
+        total_sell_volume = 0
+        
+        for i in range(1, len(recent_data)):
+            price_change = recent_data['close'].iloc[i] - recent_data['close'].iloc[i-1]
+            volume = recent_data['volume'].iloc[i]
+            
+            if price_change > 0:
+                total_buy_volume += volume
+            elif price_change < 0:
+                total_sell_volume += volume
+        
+        total_volume = total_buy_volume + total_sell_volume
+        
+        if total_volume == 0:
+            return {'flow_direction': 'neutral', 'flow_strength': 0.0}
+        
+        buy_ratio = total_buy_volume / total_volume
+        flow_imbalance = abs(buy_ratio - 0.5) * 2  # 0 to 1 scale
+        
+        flow_direction = "bullish" if buy_ratio > 0.55 else "bearish" if buy_ratio < 0.45 else "neutral"
+        
+        return {
+            'flow_direction': flow_direction,
+            'flow_strength': round(flow_imbalance, 3),
+            'buy_ratio': round(buy_ratio, 3)
+        }
+    
+    def _analyze_trend_context(self, df: pd.DataFrame) -> Dict:
+        """Trend Context Analysis"""
+        if len(df) < 20:
+            return {'trend': 'neutral', 'trend_strength': 0.0}
+        
+        # EMA-based trend analysis
+        ema_fast = TechnicalAnalysis.calculate_ema(df['close'], 9).iloc[-1]
+        ema_slow = TechnicalAnalysis.calculate_ema(df['close'], 21).iloc[-1]
+        current_price = df['close'].iloc[-1]
+        
+        # Trend classification
+        if current_price > ema_fast > ema_slow:
+            trend = "bullish"
+            trend_strength = min((current_price - ema_slow) / ema_slow * 10, 1.0)
+        elif current_price < ema_fast < ema_slow:
+            trend = "bearish"
+            trend_strength = min((ema_slow - current_price) / current_price * 10, 1.0)
+        else:
+            trend = "neutral"
+            trend_strength = 0.0
+        
+        return {
+            'trend': trend,
+            'trend_strength': round(trend_strength, 3),
+            'ema_separation': round(abs(ema_fast - ema_slow) / ema_slow * 100, 2)
+        }
+    
+    def _detect_trading_opportunity(self, volume_analysis: Dict, rsi_analysis: Dict,
+                                  order_flow_analysis: Dict, trend_context: Dict, 
+                                  df: pd.DataFrame) -> Optional[Dict]:
+        """Detect High-Quality Trading Opportunities"""
+        
+        # Must have volume spike
+        if volume_analysis['spike_level'] == 'none':
+            return None
+        
+        current_price = df['close'].iloc[-1]
+        price_change_pct = ((current_price - df['close'].iloc[-2]) / df['close'].iloc[-2]) * 100
+        
+        # Bullish Opportunity Detection
+        if (volume_analysis['spike_strength'] > 0.4 and
+            rsi_analysis['rsi_context'] in ['extreme_oversold', 'strong_oversold', 'moderate_oversold'] and
+            price_change_pct > 0 and
+            order_flow_analysis['flow_direction'] in ['bullish', 'neutral']):
+            
+            return {
+                'signal_type': 'bullish_volume_spike',
+                'volume_analysis': volume_analysis,
+                'rsi_analysis': rsi_analysis,
+                'order_flow_analysis': order_flow_analysis,
+                'trend_context': trend_context,
+                'price_change_pct': price_change_pct,
+                'current_price': current_price,
+                'timestamp': time.time()
+            }
+        
+        # Bearish Opportunity Detection
+        elif (volume_analysis['spike_strength'] > 0.4 and
+              rsi_analysis['rsi_context'] in ['extreme_overbought', 'strong_overbought', 'moderate_overbought'] and
+              price_change_pct < 0 and
+              order_flow_analysis['flow_direction'] in ['bearish', 'neutral']):
+            
+            return {
+                'signal_type': 'bearish_volume_spike',
+                'volume_analysis': volume_analysis,
+                'rsi_analysis': rsi_analysis,
+                'order_flow_analysis': order_flow_analysis,
+                'trend_context': trend_context,
+                'price_change_pct': price_change_pct,
+                'current_price': current_price,
+                'timestamp': time.time()
+            }
+        
+        return None
+    
+    def _calculate_opportunity_quality(self, opportunity: Dict) -> float:
+        """Multi-Factor Quality Scoring (0-1 scale)"""
+        volume_analysis = opportunity['volume_analysis']
+        rsi_analysis = opportunity['rsi_analysis']
+        order_flow_analysis = opportunity['order_flow_analysis']
+        trend_context = opportunity['trend_context']
+        
+        # Multi-Factor Quality Score
+        quality_components = []
+        
+        # 1. Volume Quality (40% weight) - Most Important
+        volume_quality = volume_analysis['spike_strength']
+        if volume_analysis['institutional_detected']:
+            volume_quality = min(volume_quality + 0.15, 1.0)  # Institutional bonus
+        quality_components.append(volume_quality * 0.40)
+        
+        # 2. RSI Quality (30% weight)
+        rsi_quality = rsi_analysis['rsi_strength']
+        quality_components.append(rsi_quality * 0.30)
+        
+        # 3. Order Flow Quality (20% weight)
+        flow_quality = order_flow_analysis['flow_strength']
+        quality_components.append(flow_quality * 0.20)
+        
+        # 4. Trend Alignment (10% weight)
+        trend_quality = 0.0
+        if ((opportunity['signal_type'] == 'bullish_volume_spike' and trend_context['trend'] == 'bullish') or
+            (opportunity['signal_type'] == 'bearish_volume_spike' and trend_context['trend'] == 'bearish')):
+            trend_quality = trend_context['trend_strength']
+        quality_components.append(trend_quality * 0.10)
+        
+        final_quality = sum(quality_components)
+        
+        # Bonus for extreme conditions
+        if (volume_analysis['spike_level'] in ['extreme', 'institutional'] and
+            rsi_analysis['rsi_context'] in ['extreme_oversold', 'extreme_overbought']):
+            final_quality = min(final_quality + 0.05, 1.0)
+        
+        return round(final_quality, 3)
+    
+    def _add_to_opportunity_pool(self, opportunity: Dict, quality_score: float):
+        """Add opportunity to selection pool"""
+        opportunity_record = {
+            'timestamp': time.time(),
+            'quality_score': quality_score,
+            'opportunity': opportunity
+        }
+        
+        self.opportunity_pool.append(opportunity_record)
+        
+        # Keep pool sorted by quality (best first)
+        sorted_pool = sorted(self.opportunity_pool, 
+                           key=lambda x: x['quality_score'], reverse=True)
+        self.opportunity_pool = deque(sorted_pool, maxlen=150)
+    
+    def _should_execute_opportunity(self, quality_score: float) -> bool:
+        """Smart Execution Decision with Dynamic Quality Thresholds"""
+        
+        # Check daily trade limit
+        if self.executed_trades_today >= self.daily_trade_target:
+            return False
+        
+        # Progress-based quality requirements
+        progress_ratio = self.executed_trades_today / self.daily_trade_target
+        
+        # Dynamic thresholds based on daily progress
+        if progress_ratio < 0.4:  # First 40% - Be selective
+            required_quality = self.excellent_quality  # 85%
+        elif progress_ratio < 0.8:  # Middle 40% - Moderate standards
+            required_quality = (self.excellent_quality + self.min_quality_score) / 2  # 77.5%
+        else:  # Final 20% - Meet targets
+            required_quality = self.min_quality_score  # 70%
+        
+        # Elite opportunities always execute
+        if quality_score >= self.elite_quality:
+            return True
+        
+        # Standard quality check
+        return quality_score >= required_quality
+    
+    def _generate_execution_signal(self, opportunity: Dict, quality_score: float) -> Tuple[str, float, Dict]:
+        """Generate Final Execution Signal"""
+        
+        signal_type = "Buy" if opportunity['signal_type'] == 'bullish_volume_spike' else "Sell"
+        
+        # Update quality statistics
+        if quality_score >= self.elite_quality:
+            self.quality_stats['elite_count'] += 1
+        elif quality_score >= self.excellent_quality:
+            self.quality_stats['excellent_count'] += 1
+        else:
+            self.quality_stats['good_count'] += 1
+        
+        self.quality_stats['total_quality_score'] += quality_score
+        
+        # Comprehensive analysis for logging and monitoring
+        analysis = {
+            'hfq_lite_quality': quality_score,
+            'volume_spike_level': opportunity['volume_analysis']['spike_level'],
+            'volume_ratio': opportunity['volume_analysis']['volume_ratio'],
+            'institutional_detected': opportunity['volume_analysis']['institutional_detected'],
+            'rsi': opportunity['rsi_analysis']['rsi'],
+            'rsi_context': opportunity['rsi_analysis']['rsi_context'],
+            'order_flow_direction': opportunity['order_flow_analysis']['flow_direction'],
+            'trend_alignment': opportunity['trend_context']['trend'],
+            'price_change_pct': opportunity['price_change_pct'],
+            'trade_number': self.executed_trades_today + 1,
+            'daily_progress': f"{self.executed_trades_today + 1}/{self.daily_trade_target}",
+            'selection_rate': self._calculate_selection_rate(),
+            'avg_daily_quality': self._get_avg_daily_quality()
+        }
+        
+        self.executed_trades_today += 1
+        
+        # Enhanced logging
+        spike_level = opportunity['volume_analysis']['spike_level'].upper()
+        volume_ratio = opportunity['volume_analysis']['volume_ratio']
+        
+        self.logger.info(
+            f"🎯 HFQ-LITE EXECUTION #{self.executed_trades_today}/{self.daily_trade_target}: "
+            f"{signal_type} @ {quality_score:.1%} quality "
+            f"({spike_level} spike: {volume_ratio:.1f}x volume)"
+        )
+        
+        return signal_type, quality_score, analysis
+    
+    def _calculate_selection_rate(self) -> str:
+        """Calculate current selection rate percentage"""
+        if self.daily_opportunities_analyzed == 0:
+            return "0.0%"
+        
+        rate = (self.executed_trades_today / self.daily_opportunities_analyzed) * 100
+        return f"{rate:.1f}%"
+    
+    def _get_avg_daily_quality(self) -> float:
+        """Calculate average quality of executed trades today"""
+        if self.executed_trades_today == 0:
+            return 0.0
+        
+        return round(self.quality_stats['total_quality_score'] / self.executed_trades_today, 3)
+    
+    def get_hfq_lite_status(self) -> Dict:
+        """Get comprehensive HFQ-Lite strategy status"""
+        avg_execution_time = (sum(self.execution_times) / len(self.execution_times) 
+                            if self.execution_times else 0)
+        
+        return {
+            'trades_executed_today': self.executed_trades_today,
+            'daily_target': self.daily_trade_target,
+            'target_remaining': self.daily_trade_target - self.executed_trades_today,
+            'opportunities_analyzed': self.daily_opportunities_analyzed,
+            'selection_rate': self._calculate_selection_rate(),
+            'avg_quality_score': self._get_avg_daily_quality(),
+            'quality_distribution': {
+                'elite': self.quality_stats['elite_count'],
+                'excellent': self.quality_stats['excellent_count'],
+                'good': self.quality_stats['good_count']
+            },
+            'avg_execution_time_ms': round(avg_execution_time, 2),
+            'opportunity_pool_size': len(self.opportunity_pool),
+            'top_opportunity_quality': (self.opportunity_pool[0]['quality_score'] 
+                                      if self.opportunity_pool else 0.0),
+            'volume_thresholds': {
+                'moderate': self.moderate_spike_ratio,
+                'strong': self.strong_spike_ratio,
+                'institutional': self.institutional_spike_ratio,
+                'extreme': self.extreme_spike_ratio
+            }
+        }
+    
+    def reset_daily_counters(self):
+        """Reset daily statistics (call at start of each trading day)"""
+        self.executed_trades_today = 0
+        self.daily_opportunities_analyzed = 0
+        self.quality_stats = {
+            'elite_count': 0,
+            'excellent_count': 0,
+            'good_count': 0,
+            'total_quality_score': 0.0
+        }
+        self.opportunity_pool.clear()
+        
+        self.logger.info("�� HFQ-Lite Volume Spike daily counters reset")
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get HFQ-Lite specific strategy information"""
+        base_info = self.get_strategy_info()
+        hfq_status = self.get_hfq_lite_status()
+        
+        return {**base_info, 'hfq_lite_status': hfq_status}
+
+# =====================================
+# STRATEGY 7: HFQ-LITE BOLLINGER BANDS
+# =====================================
+
+class BollingerBandsStrategy(BaseStrategy):
+    """
+    HFQ-Lite Bollinger Bands Strategy
+    Professional volatility and mean reversion trading
+    
+    Key Features:
+    - Analyzes 120+ opportunities daily, executes best 45
+    - Multi-scenario BB analysis (squeeze, breakout, mean reversion)
+    - Bollinger squeeze detection with expansion timing
+    - Quality-based execution (75%+ minimum quality)
+    - Volume and trend confirmation system
+    """
+    
+    def __init__(self, config, session, market_data, logger):
+        super().__init__(StrategyType.BOLLINGER_BANDS, config, session, market_data, logger)
+        
+        # HFQ-Lite BB Configuration
+        self.bb_period = 20                      # Standard BB period
+        self.bb_std_dev = 2.0                    # Standard deviation multiplier
+        
+        # BB Scenario Classification
+        self.tight_squeeze_threshold = 1.2       # Very tight bands (1.2% width)
+        self.moderate_squeeze_threshold = 1.8    # Moderate squeeze (1.8% width)
+        self.normal_width_threshold = 2.5        # Normal volatility (2.5% width)
+        self.high_volatility_threshold = 4.0     # High volatility (4.0%+ width)
+        
+        # Position Thresholds (Dynamic based on volatility)
+        self.extreme_oversold_threshold = 0.05   # 5% from lower band
+        self.strong_oversold_threshold = 0.15    # 15% from lower band
+        self.moderate_oversold_threshold = 0.25  # 25% from lower band
+        self.extreme_overbought_threshold = 0.95 # 95% from lower band
+        self.strong_overbought_threshold = 0.85  # 85% from lower band
+        self.moderate_overbought_threshold = 0.75 # 75% from lower band
+        
+        # Quality thresholds
+        self.min_quality_score = 0.75            # 75% minimum quality
+        self.excellent_quality = 0.88            # 88% excellent quality
+        self.elite_quality = 0.95               # 95% elite quality
+        
+        # Daily tracking
+        self.daily_trade_target = 45             # 45 high-quality BB trades per day
+        self.executed_trades_today = 0
+        self.daily_opportunities_analyzed = 0
+        self.opportunity_pool = deque(maxlen=120)
+        
+        # BB-specific tracking
+        self.bb_scenario_stats = {
+            'squeeze_release': 0,
+            'mean_reversion': 0,
+            'volatility_breakout': 0,
+            'trend_continuation': 0
+        }
+        
+        # Quality statistics
+        self.quality_stats = {
+            'elite_count': 0,
+            'excellent_count': 0, 
+            'good_count': 0,
+            'total_quality_score': 0.0
+        }
+        
+        # Performance tracking
+        self.execution_times = deque(maxlen=50)
+        self.bb_width_history = deque(maxlen=100)
+        
+        logger.info(f"🎯 HFQ-Lite Bollinger Bands Strategy initialized")
+        logger.info(f"   Target: {self.daily_trade_target} high-quality BB trades/day")
+        logger.info(f"   Quality Threshold: {self.min_quality_score:.0%}+ minimum")
+        logger.info(f"   Scenarios: Squeeze Release, Mean Reversion, Breakout, Trend")
+    
+    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+        """HFQ-Lite Bollinger Bands Strategy - Professional volatility trading"""
+        start_time = time.time()
+        
+        try:
+            if len(df) < 30:
+                return "Hold", 0.0, {}
+            
+            # Quick pre-filtering for BB scenarios
+            if not self._quick_bb_check(df):
+                return "Hold", 0.0, {}
+            
+            # Core Multi-Factor BB Analysis
+            bb_analysis = self._analyze_bollinger_bands(df)
+            volatility_analysis = self._analyze_volatility_context(df)
+            rsi_analysis = self._analyze_rsi_confluence(df)
+            volume_analysis = self._analyze_volume_confirmation(df)
+            trend_analysis = self._analyze_trend_context(df)
+            
+            # BB Scenario Detection
+            bb_scenario = self._detect_bb_scenario(
+                bb_analysis, volatility_analysis, rsi_analysis, volume_analysis, trend_analysis, df
+            )
+            
+            if not bb_scenario:
+                return "Hold", 0.0, {}
+            
+            # Quality Scoring (Multi-Factor BB Approach)
+            quality_score = self._calculate_bb_quality(bb_scenario)
+            
+            if quality_score < self.min_quality_score:
+                return "Hold", 0.0, {}
+            
+            # Add to opportunity pool for selection
+            self._add_to_opportunity_pool(bb_scenario, quality_score)
+            self.daily_opportunities_analyzed += 1
+            
+            # Smart Execution Decision (Quality-Based Selection)
+            if self._should_execute_bb_opportunity(quality_score):
+                signal_type, strength, analysis = self._generate_bb_execution_signal(
+                    bb_scenario, quality_score
+                )
+                
+                # Track execution time
+                execution_time = (time.time() - start_time) * 1000
+                self.execution_times.append(execution_time)
+                
+                return signal_type, strength, analysis
+            
+            return "Hold", 0.0, {}
+            
+        except Exception as e:
+            self.logger.error(f"❌ HFQ-Lite Bollinger Bands error: {e}")
+            return "Hold", 0.0, {}
+    
+    def _quick_bb_check(self, df: pd.DataFrame) -> bool:
+        """Quick BB pre-filter to save computation"""
+        if len(df) < 20:
+            return False
+        
+        # Quick BB calculation for pre-filtering
+        bb_data = TechnicalAnalysis.calculate_bollinger_bands(df['close'], self.bb_period, self.bb_std_dev)
+        current_price = df['close'].iloc[-1]
+        upper_band = bb_data['upper'].iloc[-1]
+        lower_band = bb_data['lower'].iloc[-1]
+        
+        # Check if price is in interesting BB zone
+        bb_position = (current_price - lower_band) / (upper_band - lower_band)
+        
+        # Only proceed if price is near bands or in squeeze
+        bb_width = (upper_band - lower_band) / bb_data['middle'].iloc[-1] * 100
+        
+        return (bb_position <= 0.3 or bb_position >= 0.7 or bb_width <= self.moderate_squeeze_threshold)
+    
+    def _analyze_bollinger_bands(self, df: pd.DataFrame) -> Dict:
+        """Comprehensive Bollinger Bands Analysis"""
+        bb_data = TechnicalAnalysis.calculate_bollinger_bands(df['close'], self.bb_period, self.bb_std_dev)
+        current_price = df['close'].iloc[-1]
+        
+        upper_band = bb_data['upper'].iloc[-1]
+        lower_band = bb_data['lower'].iloc[-1]
+        middle_band = bb_data['middle'].iloc[-1]
+        
+        # BB position and width
+        bb_position = (current_price - lower_band) / (upper_band - lower_band)
+        bb_width = (upper_band - lower_band) / middle_band * 100
+        
+        # Track width history for squeeze detection
+        self.bb_width_history.append(bb_width)
+        
+        # BB Width Classification
+        width_category = "normal"
+        width_strength = 0.5
+        
+        if bb_width <= self.tight_squeeze_threshold:
+            width_category = "tight_squeeze"
+            width_strength = 1.0
+        elif bb_width <= self.moderate_squeeze_threshold:
+            width_category = "moderate_squeeze"
+            width_strength = 0.8
+        elif bb_width >= self.high_volatility_threshold:
+            width_category = "high_volatility"
+            width_strength = 0.3
+        
+        # BB Position Classification
+        position_category = "middle"
+        position_strength = 0.0
+        
+        if bb_position <= self.extreme_oversold_threshold:
+            position_category = "extreme_oversold"
+            position_strength = 1.0
+        elif bb_position <= self.strong_oversold_threshold:
+            position_category = "strong_oversold"
+            position_strength = 0.8
+        elif bb_position <= self.moderate_oversold_threshold:
+            position_category = "moderate_oversold"
+            position_strength = 0.6
+        elif bb_position >= self.extreme_overbought_threshold:
+            position_category = "extreme_overbought"
+            position_strength = 1.0
+        elif bb_position >= self.strong_overbought_threshold:
+            position_category = "strong_overbought"
+            position_strength = 0.8
+        elif bb_position >= self.moderate_overbought_threshold:
+            position_category = "moderate_overbought"
+            position_strength = 0.6
+        
+        # BB Squeeze Detection (expanding from tight conditions)
+        squeeze_expansion = False
+        if len(self.bb_width_history) >= 5:
+            recent_widths = list(self.bb_width_history)[-5:]
+            if (min(recent_widths[:-1]) <= self.moderate_squeeze_threshold and 
+                recent_widths[-1] > recent_widths[-2]):
+                squeeze_expansion = True
+        
+        return {
+            'current_price': current_price,
+            'upper_band': upper_band,
+            'lower_band': lower_band,
+            'middle_band': middle_band,
+            'bb_position': round(bb_position, 3),
+            'bb_width': round(bb_width, 2),
+            'width_category': width_category,
+            'width_strength': width_strength,
+            'position_category': position_category,
+            'position_strength': position_strength,
+            'squeeze_expansion': squeeze_expansion
+        }
+    
+    def _analyze_volatility_context(self, df: pd.DataFrame) -> Dict:
+        """Volatility Context Analysis"""
+        if len(df) < 20:
+            return {'volatility_trend': 'neutral', 'volatility_strength': 0.0}
+        
+        # ATR-based volatility
+        atr_14 = self._calculate_atr(df, 14)
+        current_atr = atr_14.iloc[-1]
+        avg_atr = atr_14.tail(10).mean()
+        
+        volatility_ratio = current_atr / max(avg_atr, 0.001)
+        
+        # Volatility trend
+        volatility_trend = "neutral"
+        volatility_strength = 0.5
+        
+        if volatility_ratio >= 1.5:
+            volatility_trend = "expanding"
+            volatility_strength = 1.0
+        elif volatility_ratio <= 0.7:
+            volatility_trend = "contracting"
+            volatility_strength = 0.8
+        
+        # Price range analysis
+        recent_data = df.tail(10)
+        price_ranges = (recent_data['high'] - recent_data['low']) / recent_data['close'] * 100
+        avg_range = price_ranges.mean()
+        
+        return {
+            'volatility_ratio': round(volatility_ratio, 2),
+            'volatility_trend': volatility_trend,
+            'volatility_strength': volatility_strength,
+            'current_atr': current_atr,
+            'avg_range_pct': round(avg_range, 2)
+        }
+    
+    def _analyze_rsi_confluence(self, df: pd.DataFrame) -> Dict:
+        """RSI Analysis with BB Confluence"""
+        rsi = TechnicalAnalysis.calculate_rsi(df['close'], 14).iloc[-1]
+        
+        # RSI classification for BB strategy
+        rsi_context = "neutral"
+        rsi_strength = 0.0
+        bb_rsi_confluence = False
+        
+        if rsi <= 20:
+            rsi_context = "extreme_oversold"
+            rsi_strength = 1.0
+            bb_rsi_confluence = True
+        elif rsi <= 30:
+            rsi_context = "strong_oversold"
+            rsi_strength = 0.8
+            bb_rsi_confluence = True
+        elif rsi <= 40:
+            rsi_context = "moderate_oversold"
+            rsi_strength = 0.6
+        elif rsi >= 80:
+            rsi_context = "extreme_overbought"
+            rsi_strength = 1.0
+            bb_rsi_confluence = True
+        elif rsi >= 70:
+            rsi_context = "strong_overbought"
+            rsi_strength = 0.8
+            bb_rsi_confluence = True
+        elif rsi >= 60:
+            rsi_context = "moderate_overbought"
+            rsi_strength = 0.6
+        
+        # RSI divergence detection (basic)
+        rsi_series = TechnicalAnalysis.calculate_rsi(df['close'], 14)
+        rsi_momentum = 0.0
+        if len(rsi_series) >= 5:
+            rsi_momentum = rsi_series.iloc[-1] - rsi_series.iloc[-5]
+        
+        return {
+            'rsi': round(rsi, 1),
+            'rsi_context': rsi_context,
+            'rsi_strength': rsi_strength,
+            'bb_rsi_confluence': bb_rsi_confluence,
+            'rsi_momentum': round(rsi_momentum, 2)
+        }
+    
+    def _analyze_volume_confirmation(self, df: pd.DataFrame) -> Dict:
+        """Volume Confirmation for BB Signals"""
+        if len(df) < 20:
+            return {'volume_confirmation': False, 'volume_strength': 0.0}
+        
+        current_volume = df['volume'].iloc[-1]
+        avg_volume = df['volume'].tail(20).mean()
+        volume_ratio = current_volume / max(avg_volume, 1)
+        
+        # Volume classification for BB strategy
+        volume_confirmation = False
+        volume_strength = 0.0
+        
+        if volume_ratio >= 2.0:
+            volume_confirmation = True
+            volume_strength = 1.0
+        elif volume_ratio >= 1.5:
+            volume_confirmation = True
+            volume_strength = 0.7
+        elif volume_ratio >= 1.2:
+            volume_strength = 0.4
+        
+        # Volume trend
+        early_volume = df['volume'].iloc[-10:-5].mean() if len(df) >= 10 else avg_volume
+        late_volume = df['volume'].tail(5).mean()
+        volume_trend = (late_volume - early_volume) / early_volume if early_volume > 0 else 0
+        
+        return {
+            'volume_ratio': round(volume_ratio, 2),
+            'volume_confirmation': volume_confirmation,
+            'volume_strength': volume_strength,
+            'volume_trend': round(volume_trend, 3)
+        }
+    
+    def _analyze_trend_context(self, df: pd.DataFrame) -> Dict:
+        """Trend Context for BB Strategy"""
+        if len(df) < 50:
+            return {'trend': 'neutral', 'trend_strength': 0.0}
+        
+        # Multiple EMA trend analysis
+        ema_20 = TechnicalAnalysis.calculate_ema(df['close'], 20).iloc[-1]
+        ema_50 = TechnicalAnalysis.calculate_ema(df['close'], 50).iloc[-1]
+        current_price = df['close'].iloc[-1]
+        
+        # Trend classification
+        trend = "neutral"
+        trend_strength = 0.0
+        
+        if current_price > ema_20 > ema_50:
+            trend = "bullish"
+            trend_strength = min((current_price - ema_50) / ema_50 * 5, 1.0)
+        elif current_price < ema_20 < ema_50:
+            trend = "bearish"
+            trend_strength = min((ema_50 - current_price) / current_price * 5, 1.0)
+        
+        # Trend vs BB middle band
+        bb_middle = TechnicalAnalysis.calculate_bollinger_bands(df['close'], 20, 2)['middle'].iloc[-1]
+        price_vs_middle = (current_price - bb_middle) / bb_middle * 100
+        
+        return {
+            'trend': trend,
+            'trend_strength': round(trend_strength, 3),
+            'price_vs_bb_middle': round(price_vs_middle, 2),
+            'ema_20': ema_20,
+            'ema_50': ema_50
+        }
+    
+    def _calculate_atr(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
+        """Calculate Average True Range"""
+        try:
+            high = df['high']
+            low = df['low']
+            close = df['close'].shift(1)
+            
+            tr1 = high - low
+            tr2 = abs(high - close)
+            tr3 = abs(low - close)
+            
+            true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = true_range.rolling(window=period).mean()
+            
+            return atr
+        except:
+            return pd.Series([df['close'].iloc[-1] * 0.02] * len(df))
+    
+    def _detect_bb_scenario(self, bb_analysis: Dict, volatility_analysis: Dict,
+                           rsi_analysis: Dict, volume_analysis: Dict, 
+                           trend_analysis: Dict, df: pd.DataFrame) -> Optional[Dict]:
+        """Detect High-Quality BB Trading Scenarios"""
+        
+        current_price = df['close'].iloc[-1]
+        price_change_pct = ((current_price - df['close'].iloc[-2]) / df['close'].iloc[-2]) * 100
+        
+        # Scenario 1: Squeeze Release (High Priority)
+        if (bb_analysis['squeeze_expansion'] and
+            volatility_analysis['volatility_trend'] == 'expanding' and
+            volume_analysis['volume_confirmation']):
+            
+            signal_direction = None
+            if (price_change_pct > 0 and 
+                rsi_analysis['rsi'] < 60 and
+                trend_analysis['trend'] in ['bullish', 'neutral']):
+                signal_direction = 'bullish_squeeze_release'
+            elif (price_change_pct < 0 and 
+                  rsi_analysis['rsi'] > 40 and
+                  trend_analysis['trend'] in ['bearish', 'neutral']):
+                signal_direction = 'bearish_squeeze_release'
+            
+            if signal_direction:
+                return {
+                    'scenario_type': 'squeeze_release',
+                    'signal_type': signal_direction,
+                    'bb_analysis': bb_analysis,
+                    'volatility_analysis': volatility_analysis,
+                    'rsi_analysis': rsi_analysis,
+                    'volume_analysis': volume_analysis,
+                    'trend_analysis': trend_analysis,
+                    'price_change_pct': price_change_pct,
+                    'current_price': current_price,
+                    'timestamp': time.time()
+                }
+        
+        # Scenario 2: Mean Reversion (Classic BB)
+        if (bb_analysis['position_strength'] >= 0.6 and
+            rsi_analysis['bb_rsi_confluence'] and
+            volatility_analysis['volatility_trend'] != 'expanding'):
+            
+            signal_direction = None
+            if (bb_analysis['position_category'] in ['extreme_oversold', 'strong_oversold'] and
+                rsi_analysis['rsi_context'] in ['extreme_oversold', 'strong_oversold'] and
+                price_change_pct <= 0):
+                signal_direction = 'bullish_mean_reversion'
+            elif (bb_analysis['position_category'] in ['extreme_overbought', 'strong_overbought'] and
+                  rsi_analysis['rsi_context'] in ['extreme_overbought', 'strong_overbought'] and
+                  price_change_pct >= 0):
+                signal_direction = 'bearish_mean_reversion'
+            
+            if signal_direction:
+                return {
+                    'scenario_type': 'mean_reversion',
+                    'signal_type': signal_direction,
+                    'bb_analysis': bb_analysis,
+                    'volatility_analysis': volatility_analysis,
+                    'rsi_analysis': rsi_analysis,
+                    'volume_analysis': volume_analysis,
+                    'trend_analysis': trend_analysis,
+                    'price_change_pct': price_change_pct,
+                    'current_price': current_price,
+                    'timestamp': time.time()
+                }
+        
+        # Scenario 3: Volatility Breakout
+        if (bb_analysis['width_category'] == 'high_volatility' and
+            abs(price_change_pct) > 0.3 and
+            volume_analysis['volume_confirmation']):
+            
+            signal_direction = None
+            if (price_change_pct > 0 and 
+                bb_analysis['bb_position'] > 0.8 and
+                trend_analysis['trend'] == 'bullish'):
+                signal_direction = 'bullish_volatility_breakout'
+            elif (price_change_pct < 0 and 
+                  bb_analysis['bb_position'] < 0.2 and
+                  trend_analysis['trend'] == 'bearish'):
+                signal_direction = 'bearish_volatility_breakout'
+            
+            if signal_direction:
+                return {
+                    'scenario_type': 'volatility_breakout',
+                    'signal_type': signal_direction,
+                    'bb_analysis': bb_analysis,
+                    'volatility_analysis': volatility_analysis,
+                    'rsi_analysis': rsi_analysis,
+                    'volume_analysis': volume_analysis,
+                    'trend_analysis': trend_analysis,
+                    'price_change_pct': price_change_pct,
+                    'current_price': current_price,
+                    'timestamp': time.time()
+                }
+        
+        return None
+    
+    def _calculate_bb_quality(self, bb_scenario: Dict) -> float:
+        """Multi-Factor BB Quality Scoring (0-1 scale)"""
+        bb_analysis = bb_scenario['bb_analysis']
+        volatility_analysis = bb_scenario['volatility_analysis']
+        rsi_analysis = bb_scenario['rsi_analysis']
+        volume_analysis = bb_scenario['volume_analysis']
+        trend_analysis = bb_scenario['trend_analysis']
+        scenario_type = bb_scenario['scenario_type']
+        
+        # Multi-Factor Quality Score (weighted by scenario)
+        quality_components = []
+        
+        # 1. BB-Specific Quality (35% weight)
+        bb_quality = (bb_analysis['position_strength'] + bb_analysis['width_strength']) / 2
+        if bb_analysis['squeeze_expansion']:  # Squeeze release bonus
+            bb_quality = min(bb_quality + 0.2, 1.0)
+        quality_components.append(bb_quality * 0.35)
+        
+        # 2. RSI Confluence Quality (25% weight)
+        rsi_quality = rsi_analysis['rsi_strength']
+        if rsi_analysis['bb_rsi_confluence']:  # BB-RSI confluence bonus
+            rsi_quality = min(rsi_quality + 0.15, 1.0)
+        quality_components.append(rsi_quality * 0.25)
+        
+        # 3. Volume Confirmation Quality (20% weight)
+        volume_quality = volume_analysis['volume_strength']
+        quality_components.append(volume_quality * 0.20)
+        
+        # 4. Volatility Context Quality (15% weight)
+        volatility_quality = volatility_analysis['volatility_strength']
+        quality_components.append(volatility_quality * 0.15)
+        
+        # 5. Trend Alignment Quality (5% weight)
+        trend_quality = 0.0
+        if ((bb_scenario['signal_type'].startswith('bullish') and trend_analysis['trend'] == 'bullish') or
+            (bb_scenario['signal_type'].startswith('bearish') and trend_analysis['trend'] == 'bearish')):
+            trend_quality = trend_analysis['trend_strength']
+        quality_components.append(trend_quality * 0.05)
+        
+        final_quality = sum(quality_components)
+        
+        # Scenario-specific bonuses
+        if scenario_type == 'squeeze_release':
+            final_quality = min(final_quality + 0.05, 1.0)  # Squeeze release premium
+        elif scenario_type == 'mean_reversion' and bb_analysis['position_category'] in ['extreme_oversold', 'extreme_overbought']:
+            final_quality = min(final_quality + 0.03, 1.0)  # Extreme position bonus
+        
+        return round(final_quality, 3)
+    
+    def _add_to_opportunity_pool(self, bb_scenario: Dict, quality_score: float):
+        """Add BB opportunity to selection pool"""
+        opportunity_record = {
+            'timestamp': time.time(),
+            'quality_score': quality_score,
+            'bb_scenario': bb_scenario
+        }
+        
+        self.opportunity_pool.append(opportunity_record)
+        
+        # Keep pool sorted by quality (best first)
+        sorted_pool = sorted(self.opportunity_pool, 
+                           key=lambda x: x['quality_score'], reverse=True)
+        self.opportunity_pool = deque(sorted_pool, maxlen=120)
+    
+    def _should_execute_bb_opportunity(self, quality_score: float) -> bool:
+        """Smart BB Execution Decision with Dynamic Quality Thresholds"""
+        
+        # Check daily trade limit
+        if self.executed_trades_today >= self.daily_trade_target:
+            return False
+        
+        # Progress-based quality requirements (more selective than volume strategy)
+        progress_ratio = self.executed_trades_today / self.daily_trade_target
+        
+        # Dynamic thresholds for BB strategy (higher standards)
+        if progress_ratio < 0.3:  # First 30% - Very selective
+            required_quality = self.excellent_quality  # 88%
+        elif progress_ratio < 0.7:  # Middle 40% - Selective
+            required_quality = (self.excellent_quality + self.min_quality_score) / 2  # 81.5%
+        else:  # Final 30% - Meet targets
+            required_quality = self.min_quality_score  # 75%
+        
+        # Elite opportunities always execute
+        if quality_score >= self.elite_quality:
+            return True
+        
+        # Standard quality check
+        return quality_score >= required_quality
+    
+    def _generate_bb_execution_signal(self, bb_scenario: Dict, quality_score: float) -> Tuple[str, float, Dict]:
+        """Generate Final BB Execution Signal"""
+        
+        signal_type = "Buy" if bb_scenario['signal_type'].startswith('bullish') else "Sell"
+        
+        # Update quality statistics
+        if quality_score >= self.elite_quality:
+            self.quality_stats['elite_count'] += 1
+        elif quality_score >= self.excellent_quality:
+            self.quality_stats['excellent_count'] += 1
+        else:
+            self.quality_stats['good_count'] += 1
+        
+        self.quality_stats['total_quality_score'] += quality_score
+        
+        # Update scenario statistics
+        scenario_type = bb_scenario['scenario_type']
+        if scenario_type in self.bb_scenario_stats:
+            self.bb_scenario_stats[scenario_type] += 1
+        
+        # Comprehensive analysis for logging and monitoring
+        analysis = {
+            'hfq_bb_quality': quality_score,
+            'bb_scenario': bb_scenario['scenario_type'],
+            'signal_subtype': bb_scenario['signal_type'],
+            'bb_position': bb_scenario['bb_analysis']['bb_position'],
+            'bb_width': bb_scenario['bb_analysis']['bb_width'],
+            'width_category': bb_scenario['bb_analysis']['width_category'],
+            'position_category': bb_scenario['bb_analysis']['position_category'],
+            'squeeze_expansion': bb_scenario['bb_analysis']['squeeze_expansion'],
+            'rsi': bb_scenario['rsi_analysis']['rsi'],
+            'rsi_context': bb_scenario['rsi_analysis']['rsi_context'],
+            'bb_rsi_confluence': bb_scenario['rsi_analysis']['bb_rsi_confluence'],
+            'volume_confirmation': bb_scenario['volume_analysis']['volume_confirmation'],
+            'volatility_trend': bb_scenario['volatility_analysis']['volatility_trend'],
+            'trend_alignment': bb_scenario['trend_analysis']['trend'],
+            'trade_number': self.executed_trades_today + 1,
+            'daily_progress': f"{self.executed_trades_today + 1}/{self.daily_trade_target}",
+            'selection_rate': self._calculate_bb_selection_rate(),
+            'avg_daily_quality': self._get_avg_bb_quality()
+        }
+        
+        self.executed_trades_today += 1
+        
+        # Enhanced logging
+        scenario = bb_scenario['scenario_type'].upper().replace('_', ' ')
+        bb_width = bb_scenario['bb_analysis']['bb_width']
+        
+        self.logger.info(
+            f"🎯 HFQ-BB EXECUTION #{self.executed_trades_today}/{self.daily_trade_target}: "
+            f"{signal_type} @ {quality_score:.1%} quality "
+            f"({scenario}: {bb_width:.1f}% width)"
+        )
+        
+        return signal_type, quality_score, analysis
+    
+    def _calculate_bb_selection_rate(self) -> str:
+        """Calculate current BB selection rate percentage"""
+        if self.daily_opportunities_analyzed == 0:
+            return "0.0%"
+        
+        rate = (self.executed_trades_today / self.daily_opportunities_analyzed) * 100
+        return f"{rate:.1f}%"
+    
+    def _get_avg_bb_quality(self) -> float:
+        """Calculate average quality of executed BB trades today"""
+        if self.executed_trades_today == 0:
+            return 0.0
+        
+        return round(self.quality_stats['total_quality_score'] / self.executed_trades_today, 3)
+    
+    def get_hfq_bb_status(self) -> Dict:
+        """Get comprehensive HFQ-BB strategy status"""
+        avg_execution_time = (sum(self.execution_times) / len(self.execution_times) 
+                            if self.execution_times else 0)
+        
+        return {
+            'trades_executed_today': self.executed_trades_today,
+            'daily_target': self.daily_trade_target,
+            'target_remaining': self.daily_trade_target - self.executed_trades_today,
+            'opportunities_analyzed': self.daily_opportunities_analyzed,
+            'selection_rate': self._calculate_bb_selection_rate(),
+            'avg_quality_score': self._get_avg_bb_quality(),
+            'quality_distribution': {
+                'elite': self.quality_stats['elite_count'],
+                'excellent': self.quality_stats['excellent_count'],
+                'good': self.quality_stats['good_count']
+            },
+            'scenario_distribution': self.bb_scenario_stats.copy(),
+            'avg_execution_time_ms': round(avg_execution_time, 2),
+            'opportunity_pool_size': len(self.opportunity_pool),
+            'top_opportunity_quality': (self.opportunity_pool[0]['quality_score'] 
+                                      if self.opportunity_pool else 0.0),
+            'bb_thresholds': {
+                'tight_squeeze': self.tight_squeeze_threshold,
+                'moderate_squeeze': self.moderate_squeeze_threshold,
+                'high_volatility': self.high_volatility_threshold
+            },
+            'current_bb_width': list(self.bb_width_history)[-1] if self.bb_width_history else 0.0
+        }
+    
+    def reset_daily_counters(self):
+        """Reset daily BB statistics (call at start of each trading day)"""
+        self.executed_trades_today = 0
+        self.daily_opportunities_analyzed = 0
+        self.quality_stats = {
+            'elite_count': 0,
+            'excellent_count': 0,
+            'good_count': 0,
+            'total_quality_score': 0.0
+        }
+        self.bb_scenario_stats = {
+            'squeeze_release': 0,
+            'mean_reversion': 0,
+            'volatility_breakout': 0,
+            'trend_continuation': 0
+        }
+        self.opportunity_pool.clear()
+        
+        self.logger.info("🔄 HFQ-BB daily counters reset")
+    
+    def get_strategy_specific_info(self) -> Dict:
+        """Get HFQ-BB specific strategy information"""
+        base_info = self.get_strategy_info()
+        hfq_bb_status = self.get_hfq_bb_status()
+        
+        return {**base_info, 'hfq_bb_status': hfq_bb_status}
+    
+# =====================================
+# STRATEGY 8: HFQ ELITE HYBRID COMPOSITE
+# =====================================
+class HybridCompositeStrategy(BaseStrategy):
+    """
+    HFQ Elite Hybrid Composite Strategy - Advanced Multi-Indicator Fusion
+    Professional-grade signal combination with dynamic weighting and quality assessment
+    
+    Key Features:
+    - Multi-indicator signal fusion (RSI, EMA, MACD, Volume, Momentum)
+    - Dynamic indicator weighting based on market conditions
+    - Advanced quality scoring system (80%+ minimum quality)
+    - Regime-adaptive signal strength adjustment
+    - Volume-weighted signal confirmation
+    - Momentum confluence detection
+    - Professional execution timing
+    """
+    
+    def __init__(self, config, session, market_data, logger):
+        super().__init__(StrategyType.HYBRID_COMPOSITE, config, session, market_data, logger)
+        
+        # HFQ Elite Composite Configuration
+        self.indicator_weights = {
+            'rsi': 0.25,        # RSI weight
+            'ema': 0.25,        # EMA crossover weight  
+            'macd': 0.20,       # MACD weight
+            'volume': 0.15,     # Volume confirmation weight
+            'momentum': 0.15    # Price momentum weight
+        }
+        
+        # Quality thresholds (HFQ optimized)
+        self.min_quality_score = 0.70            # 70% minimum quality for HFQ
+        self.excellent_quality = 0.85            # 85% excellent quality
+        self.elite_quality = 0.92                # 92% elite quality
+        
+        # Signal strength thresholds (HFQ optimized)
+        self.min_signal_strength=0.05          # Lower threshold for HFQ
+        self.strong_signal_threshold = 0.70      # Strong signal threshold
+        self.elite_signal_threshold = 0.85       # Elite signal threshold
+        
+        # Indicator parameters (HFQ optimized)
+        self.rsi_period = 12                     # Faster RSI for HFQ
+        self.rsi_oversold = 30                   # Standard levels for HFQ
+        self.rsi_overbought = 70
+        self.ema_fast = 5                        # Very fast EMA for HFQ
+        self.ema_slow = 13                       # Faster slow EMA
+        self.ema_trend = 34                      # Trend filter
+        self.macd_fast = 8                       # Faster MACD for HFQ
+        self.macd_slow = 17
+        self.macd_signal = 6
+        
+        # Volume analysis (HFQ optimized)
+        self.volume_lookback = 15                # Shorter lookback for HFQ
+        self.significant_volume_ratio = 1.3      # 1.3x average volume
+        self.extreme_volume_ratio = 2.5          # 2.5x average volume
+        
+        # Performance tracking (HFQ optimized)
+        self.daily_trade_target = 150            # 150 high-quality composite trades/day
+        self.executed_trades_today = 0
+        self.daily_opportunities_analyzed = 0
+        self.opportunity_pool = deque(maxlen=300) # Larger pool for HFQ
+        
+        # Quality statistics
+        self.quality_stats = {
+            'elite_count': 0,
+            'excellent_count': 0,
+            'good_count': 0,
+            'total_quality_score': 0.0
+        }
+        
+        # Indicator performance tracking
+        self.indicator_accuracy = {
+            'rsi': {'correct': 0, 'total': 0},
+            'ema': {'correct': 0, 'total': 0},
+            'macd': {'correct': 0, 'total': 0},
+            'volume': {'correct': 0, 'total': 0},
+            'momentum': {'correct': 0, 'total': 0}
+        }
+        
+        # Execution timing
+        self.execution_times = deque(maxlen=50)
+        
+        logger.info(f"🎯 HFQ Elite Hybrid Composite Strategy initialized")
+        logger.info(f"   Target: {self.daily_trade_target} elite composite trades/day")
+        logger.info(f"   Quality Threshold: {self.min_quality_score:.0%}+ minimum")
+        logger.info(f"   Indicators: RSI, EMA, MACD, Volume, Momentum fusion")
+        logger.info(f"   HFQ Mode: Ultra-fast execution with 150 trades/day target")
+    
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
         """HFQ Elite Hybrid Composite Strategy - Advanced multi-indicator fusion"""
         start_time = time.time()
@@ -1867,23 +5490,31 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
                 return "Hold", 0.0, {}
             
             # Calculate all technical indicators
+            indicators = self._calculate_all_indicators(df)
             
             # Generate individual indicator signals
+            individual_signals = self._generate_individual_signals(indicators, df)
             
             # Calculate composite signal using dynamic weighting
+            composite_signal, composite_strength = self._calculate_composite_signal(individual_signals)
             
             # Apply quality assessment
+            quality_score = self._assess_signal_quality(individual_signals, indicators, df)
             
             # Market regime adjustment
+            regime_adjusted_strength = self._apply_regime_adjustment(composite_strength, indicators, df)
             
             # Final signal decision with quality gating
+            final_signal, final_strength = self._make_final_decision(
                 composite_signal, regime_adjusted_strength, quality_score
+            )
             
             # Performance tracking
             execution_time = time.time() - start_time
             self.execution_times.append(execution_time)
             
             # Update opportunity tracking
+            self.daily_opportunities_analyzed += 1
             if final_signal != "Hold":
                 self.opportunity_pool.append({
                     'signal': final_signal,
@@ -1935,8 +5566,12 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             indicators = {}
             
             # RSI
+            indicators['rsi'] = TechnicalAnalysis.calculate_rsi(df['close'], self.rsi_period)
             
             # EMA set
+            indicators['ema_fast'] = TechnicalAnalysis.calculate_ema(df['close'], self.ema_fast)
+            indicators['ema_slow'] = TechnicalAnalysis.calculate_ema(df['close'], self.ema_slow)
+            indicators['ema_trend'] = TechnicalAnalysis.calculate_ema(df['close'], self.ema_trend)
             
             # MACD
             indicators['macd_data'] = TechnicalAnalysis.calculate_macd(
@@ -1944,6 +5579,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             )
             
             # Volume indicators
+            indicators['volume_sma'] = df['volume'].rolling(window=self.volume_lookback).mean()
             indicators['volume_ratio'] = df['volume'] / indicators['volume_sma']
             
             # Price momentum
@@ -2297,9 +5933,11 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             
         except Exception as e:
             self.logger.error(f"❌ Status generation error: {e}")
+            return {}
 # =====================================
 # REGIME ADAPTIVE AI DIRECTOR
 # =====================================
+class RegimeAdaptiveStrategy(BaseStrategy):
     """Market Regime AI Director - Advanced Multi-Timeframe Regime Detection"""
     
     def __init__(self, config, session, market_data, logger):
@@ -2324,41 +5962,6 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
 # =====================================
 # STRATEGY 9: FUNDING ARBITRAGE
 # =====================================
-
-# =====================================
-# BASE STRATEGY CLASS
-# =====================================
-
-class BaseStrategy:
-    """Base strategy class for all trading strategies"""
-    
-    def __init__(self, strategy_type, config, session, market_data, logger):
-        self.strategy_type = strategy_type
-        self.config = config
-        self.session = session
-        self.market_data = market_data
-        self.logger = logger
-        self.positions = []
-        self.trades_today = 0
-        self.daily_pnl = 0.0
-        
-    def generate_signal(self, df):
-        """Override in each strategy"""
-        return "Hold", 0.0, {}
-        
-    def get_strategy_info(self):
-        """Get strategy information"""
-        return {
-            'name': self.config.name,
-            'type': self.strategy_type.value,
-            'enabled': self.config.enabled,
-            'trades_today': self.trades_today,
-            'daily_pnl': self.daily_pnl,
-            'max_positions': self.config.max_positions,
-            'position_value': self.config.position_value,
-            'min_confidence': self.config.min_confidence
-        }
-
 class FundingArbitrageStrategy(BaseStrategy):
     """Funding Rate Arbitrage Strategy - Harvest funding payments"""
     
@@ -2520,16 +6123,17 @@ STRATEGY_CONFIGS = {
     
     StrategyType.RSI_OVERSOLD: EliteStrategyConfig(
         name="RSI Quantum Pro",
-        enabled=False,
+        enabled=True,
         max_positions=1,                 # ↑ Increased for elite performance
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this    
 #         profit_target_pct=2.2,           # ↑ Optimized target
         max_loss_pct=0.8,               # ↓ Tighter stops with better entries
         leverage=12,                     # ↑ Higher leverage with better risk control
+        scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="3",                   # ↑ Optimized 3-minute timeframe
-        min_signal_strength=0.80,        # ↑ Higher quality threshold
+        min_signal_strength=0.05,        # ↑ Higher quality threshold
         regime_adaptive=True,
         ml_filter=True,
         volatility_scaling=True,
@@ -2540,16 +6144,17 @@ STRATEGY_CONFIGS = {
     
     StrategyType.EMA_CROSS: EliteStrategyConfig(
         name="EMA Neural Elite",
-        enabled=False,
+        enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=2.8,           # ↑ Higher targets with better timing
         max_loss_pct=0.9,               # 1% stop loss distance
         leverage=10,
-        timeframe="5",                   # ↑ Optimized 8-minute sweet spot
-        min_signal_strength=0.80,
+        scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
+        timeframe="8",                   # ↑ Optimized 8-minute sweet spot
+        min_signal_strength=0.05,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,    # ← Elite feature
@@ -2559,12 +6164,17 @@ STRATEGY_CONFIGS = {
     
     StrategyType.SCALPING: EliteStrategyConfig(
         name="Lightning Scalp Quantum",
-        enabled=False,
-        max_positions=1,
-        position_value=0,
-        position_sizing_method="risk_based",
-        risk_per_trade_pct=1.5,
-        min_signal_strength=0.85,        # ↑ Very high quality for scalping
+        enabled=True,
+        max_positions=1,                 # ↑ More positions for scalping
+        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
+        position_sizing_method="risk_based",  # ✅ ADD this
+        risk_per_trade_pct=1.5,               # ✅ ADD this       
+#         profit_target_pct=0.9,           # ↑ Slightly higher with better entries
+        max_loss_pct=0.4,               # ↓ Extremely tight stops
+        leverage=15,                     # ↑ Maximum leverage for scalping
+        scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        timeframe="1",
+        min_signal_strength=0.05,        # ↑ Very high quality for scalping
         latency_critical=True,           # ← Elite execution
         microstructure_boost=True,       # ← Order flow analysis
         execution_alpha=True,
@@ -2575,17 +6185,17 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MACD_MOMENTUM: EliteStrategyConfig(
         name="MACD Momentum Master",
-        enabled=False,
+        enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing                # ← DYNAMIC SIZING (2% of balance)
+        position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=3.2,           # ↑ Higher momentum targets
         max_loss_pct=1.0,               # 1% stop loss distance
         leverage=8,
-        scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT", "ATOMUSDT"],
+        scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT"],
         timeframe="5",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         regime_adaptive=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=1.7,
@@ -2596,16 +6206,17 @@ STRATEGY_CONFIGS = {
     
     StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
         name="HFQ Volume Spike Elite",
-        enabled=False,                    # ← ENABLED (was disabled)
+        enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,                 # ↑ More positions for volume opportunities
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=1.8,           # ↑ Higher targets with better detection
         max_loss_pct=0.8,
         leverage=12,
+        scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="1",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         microstructure_boost=True,       # ← Order flow integration
         news_integration=True,           # ← News-driven volume spikes
         execution_alpha=True,
@@ -2615,9 +6226,9 @@ STRATEGY_CONFIGS = {
     
     StrategyType.BOLLINGER_BANDS: EliteStrategyConfig(
         name="HFQ Bollinger Quantum Pro",
-        enabled=False,                    # ← ENABLED (was disabled)
+        enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=2.3,           # ↑ Optimized mean reversion targets
@@ -2625,7 +6236,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "AVAXUSDT", "MATICUSDT"],
         timeframe="5",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         regime_adaptive=True,
         volatility_scaling=True,
         ml_filter=True,
@@ -2639,13 +6250,13 @@ STRATEGY_CONFIGS = {
         name="Market Regime AI Director",
         enabled=True,
         max_positions=0,                 # Overlay strategy - adjusts others
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
 #         profit_target_pct=0,
         max_loss_pct=0,
         leverage=1,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         ml_filter=True,
         performance_feedback=True,
         auto_parameter_tuning=True,
@@ -2656,15 +6267,15 @@ STRATEGY_CONFIGS = {
         name="Funding Rate Harvester Pro",
         enabled=True,
         max_positions=1,                 # Dedicated positions for funding
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
 #         profit_target_pct=0.4,           # Small but consistent
         max_loss_pct=0.15,              # Very tight stops
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
-        timeframe="60",
-        min_signal_strength=0.80,        # Extremely high confidence
+        timeframe="1h",
+        min_signal_strength=0.05,        # Extremely high confidence
         funding_aware=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=3.0,        # High Sharpe for arbitrage
@@ -2675,7 +6286,7 @@ STRATEGY_CONFIGS = {
         name="News Alpha AI Engine",
         enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this
 #         profit_target_pct=1.8,           # Quick profits on news
@@ -2683,7 +6294,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         news_integration=True,
         latency_critical=True,
         execution_alpha=True,
@@ -2695,7 +6306,7 @@ STRATEGY_CONFIGS = {
         name="Multi-Timeframe Confluence AI",
         enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this        
 #         profit_target_pct=1.8,           # Quick profits on news
@@ -2703,7 +6314,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,
@@ -2715,7 +6326,7 @@ STRATEGY_CONFIGS = {
         name="Cross-Asset Momentum AI",
         enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES
 #         profit_target_pct=2.1,
@@ -2723,7 +6334,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "LINKUSDT", "ADAUSDT"],
         timeframe="3",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         cross_asset_correlation=True,
         regime_adaptive=True,
         ml_filter=True,
@@ -2737,7 +6348,7 @@ STRATEGY_CONFIGS = {
         name="ML Ensemble Alpha Engine",
         enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES
 #         profit_target_pct=2.5,
@@ -2745,7 +6356,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="5",
-        min_signal_strength=0.80,        # ML should be very confident
+        min_signal_strength=0.05,        # ML should be very confident
         ml_filter=True,
         regime_adaptive=True,
         performance_feedback=True,
@@ -2758,15 +6369,15 @@ STRATEGY_CONFIGS = {
         name="Order Book Alpha Predator",
         enabled=True,                    # Enable for elite performance
         max_positions=1,                 # High frequency opportunities
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES       
 #         profit_target_pct=0.6,           # Quick scalp profits
         max_loss_pct=0.25,               # Very tight stops
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
-        timeframe="1",                  # Sub-minute execution
-        min_signal_strength=0.80,
+        timeframe="1s",                  # Sub-minute execution
+        min_signal_strength=0.05,
         microstructure_boost=True,
         latency_critical=True,
         execution_alpha=True,
@@ -2778,7 +6389,7 @@ STRATEGY_CONFIGS = {
         name="Cross-Exchange Arbitrage Master",
         enabled=True,
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES             
 #         profit_target_pct=0.3,                # Small but risk-free profits
@@ -2786,7 +6397,7 @@ STRATEGY_CONFIGS = {
         leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="1",
-        min_signal_strength=0.80,             # Near-certain arbitrage only
+        min_signal_strength=0.05,             # Near-certain arbitrage only
         latency_critical=True,
         execution_alpha=True,
         smart_routing=True,
@@ -2800,13 +6411,13 @@ STRATEGY_CONFIGS = {
         name="Volatility Breakout Beast",
         enabled=False,                   # ← Keep disabled for now (can enable later)
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
 #         profit_target_pct=2.5,           # ↑ Higher target for breakouts
         max_loss_pct=1.2,                # ↑ Slightly wider stop for volatility
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength=0.80,
+        min_signal_strength=0.05,
         regime_adaptive=True,
         volatility_scaling=True
     ),
@@ -2815,23 +6426,22 @@ STRATEGY_CONFIGS = {
         name="Hybrid Composite Master",
         enabled=False,                   # ← Keep disabled (complex strategy)
         max_positions=1,
-        position_value=0,  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing  # Dynamic sizing
+        position_value=0,
 #         profit_target_pct=2.5,
         max_loss_pct=1.0,
         leverage=7,
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="5",
-        min_signal_strength=0.80,        # ← High threshold for hybrid
+        min_signal_strength=0.05,        # ← High threshold for hybrid
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True
-        ),
+    )
 }
 
 # =====================================
 # ELITE STRATEGY FACTORY
 # =====================================
-
 
 class EliteStrategyFactory:
     """Enhanced factory with HFQ strategy support"""
@@ -2974,24 +6584,20 @@ class StrategyFactory:
             raise ValueError(f"No configuration found for {strategy_type}")
         
         strategy_classes = {
-            # Commented out missing strategies
-            # StrategyType.RSI_OVERSOLD: RSIStrategy,  # Not implemented
-            # StrategyType.EMA_CROSS: EMAStrategy,  # Not implemented
-            # StrategyType.SCALPING: ScalpingStrategy,  # Not implemented
-            # StrategyType.MACD_MOMENTUM: MACDStrategy,  # Not implemented
-            # StrategyType.BREAKOUT: BreakoutStrategy,  # Not implemented
-            # StrategyType.VOLUME_SPIKE: VolumeSpikeStrategy,  # Not implemented
-            # StrategyType.BOLLINGER_BANDS: BollingerBandsStrategy,  # Not implemented
-            # StrategyType.HYBRID_COMPOSITE: HybridCompositeStrategy,  # Not implemented
-            # Only use existing strategies
+        StrategyType.RSI_OVERSOLD: RSIStrategy,
+            StrategyType.EMA_CROSS: EMAStrategy,
+            StrategyType.SCALPING: ScalpingStrategy,
+            StrategyType.MACD_MOMENTUM: MACDStrategy,
+            StrategyType.BREAKOUT: BreakoutStrategy,
+            StrategyType.VOLUME_SPIKE: VolumeSpikeStrategy,
+            StrategyType.BOLLINGER_BANDS: BollingerBandsStrategy,
+            StrategyType.HYBRID_COMPOSITE: HybridCompositeStrategy,
             StrategyType.REGIME_ADAPTIVE: RegimeAdaptiveStrategy,
             StrategyType.FUNDING_ARBITRAGE: FundingArbitrageStrategy,
             StrategyType.NEWS_SENTIMENT: NewsSentimentStrategy,
             StrategyType.MTF_CONFLUENCE: MTFConfluenceStrategy,
             StrategyType.CROSS_MOMENTUM: CrossMomentumStrategy,
             StrategyType.MACHINE_LEARNING: MLEnsembleStrategy,
-            StrategyType.ORDERBOOK_IMBALANCE: OrderbookImbalanceStrategy,
-            StrategyType.CROSS_EXCHANGE_ARB: CrossExchangeArbStrategy,
             StrategyType.ORDERBOOK_IMBALANCE: OrderbookImbalanceStrategy,
             StrategyType.CROSS_EXCHANGE_ARB: CrossExchangeArbStrategy
         }
@@ -3020,8 +6626,8 @@ class AccountManagerConfig:
     """Professional configuration class for AccountManager"""
     def __init__(self):
         # Risk Management Settings
-        self.RISK_PER_TRADE = 0.015  # 1.5% risk per trade
-        self.MAX_POSITION_PCT = 0.08  # Max 8% of balance per position
+        self.RISK_PER_TRADE = 0.015  # 2% risk per trade
+        self.MAX_POSITION_PCT = 0.15  # Max 15% of balance per position
         self.MAX_PORTFOLIO_RISK = 0.50  # Max 50% total portfolio exposure
         self.MIN_BALANCE_REQUIRED = 500  # Minimum account balance
         self.DAILY_LOSS_LIMIT_PCT = 0.10  # 10% daily loss limit
@@ -3170,7 +6776,7 @@ class AccountManager:
     def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
         """Get symbol precision with caching"""
         try:
-            cache_key = f"precision_{symbol}"
+            cachekey = f"precision{symbol}"
             if hasattr(self, f"precision_{symbol}"):
                 return getattr(self, f"precision_{symbol}")
 
@@ -3190,7 +6796,7 @@ class AccountManager:
                     precision = len(str(qty_step).split('.')[1]) if '.' in str(qty_step) else 0
 
                 result = (precision, min_qty)
-                setattr(self, f"precision_{symbol}", result)
+                setattr(self, cache_key, result)
                 return result
 
             return 3, 0.001
@@ -3256,8 +6862,7 @@ class EnhancedAccountManager(AccountManager):
         self._update_daily_loss_limit()
         logger.info("📅 Daily loss tracking reset")
         logger.info(f"   New daily loss limit: ${self.daily_loss_limit:.2f}")
-
-    def calculate_position_size_safe(self, symbol: str, entry_price: float, 
+        def calculate_position_size_safe(self, symbol: str, entry_price: float, 
                                    stop_loss: float, risk_amount: Optional[float] = None, 
                                    strategy_name: str = "Unknown") -> float:
         """
@@ -3296,7 +6901,7 @@ class EnhancedAccountManager(AccountManager):
                 # Reduce position size to stay within limit
                 position_size = max_allowed_value / entry_price
                 position_value = position_size * entry_price
-                logger.warning(f"⚠️ Position reduced to ${position_value:.2f} (8% limit)")
+                logger.warning(f"⚠️ Position reduced to ${position_value:.2f} (15% limit)")
             
             # 5. Get symbol precision
             precision, min_qty = self.get_symbol_precision(symbol)
@@ -3323,7 +6928,78 @@ class EnhancedAccountManager(AccountManager):
             
         except Exception as e:
             logger.error(f"❌ Position sizing error for {symbol}: {e}")
+            return 0            # Daily loss limit check
+            if self.daily_losses >= self.daily_loss_limit:
+                logger.error(f"🛑 DAILY LOSS LIMIT REACHED: ${self.daily_losses:.2f}")
+                return 0
+
+            # Input validation
+            if entry_price <= 0 or stop_loss <= 0:
+                logger.warning(f"❌ Invalid prices for {symbol}: entry=${entry_price}, stop=${stop_loss}")
+                return 0
+
+            balance_info = self.get_account_balance()
+            available_balance = balance_info['available']
+
+            # Balance check
+            if available_balance <= self.config.MIN_BALANCE_REQUIRED:
+                logger.error(f"❌ Insufficient balance: ${available_balance:.2f} < ${self.config.MIN_BALANCE_REQUIRED}")
+                return 0
+
+            # Use configurable risk percentage
+            if risk_amount is None:
+                risk_amount = available_balance * self.config.RISK_PER_TRADE
+
+            # Calculate position with enhanced safety checks
+            risk_per_unit = abs(entry_price - stop_loss)
+            if risk_per_unit <= 0:
+                logger.warning(f"❌ Invalid risk calculation for {symbol}")
+                return 0
+
+            # Calculate initial quantity
+            qty = risk_amount / risk_per_unit
+            precision, min_qty = self.get_symbol_precision(symbol)
+            qty = max(round(qty, precision), min_qty)
+
+            # Apply configurable max position size
+            position_value = qty * entry_price
+            max_position_value = available_balance * self.config.MAX_POSITION_PCT
+
+            if position_value > max_position_value:
+                logger.warning(f"⚠️ Reducing position size for {symbol}: ${position_value:.2f} -> ${max_position_value:.2f}")
+                qty = max_position_value / entry_price
+                qty = max(round(qty, precision), min_qty)
+                position_value = qty * entry_price
+
+            # Check minimum position size
+            if position_value < self.config.MIN_POSITION_SIZE_USD:
+                logger.warning(f"❌ Position too small for {symbol}: ${position_value:.2f} < ${self.config.MIN_POSITION_SIZE_USD}")
+                return 0
+
+            # Portfolio risk check
+            current_portfolio_risk = self.calculate_portfolio_risk()
+            if current_portfolio_risk >= self.config.MAX_PORTFOLIO_RISK * 100:
+                logger.warning(f"❌ Portfolio risk limit reached: {current_portfolio_risk:.1f}%")
+                return 0
+
+            # Final calculations
+            final_risk = qty * risk_per_unit
+            risk_pct = (final_risk / available_balance) * 100
+            position_pct = (position_value / available_balance) * 100
+
+            # Log detailed position info
+            logger.info(f"✅ {symbol} Position Calculated ({strategy_name}):")
+            logger.info(f"   Quantity: {qty}")
+            logger.info(f"   Position Value: ${position_value:.2f} ({position_pct:.1f}% of balance)")
+            logger.info(f"   Risk Amount: ${final_risk:.2f} ({risk_pct:.2f}% of balance)")
+            logger.info(f"   Entry: ${entry_price:.4f} | Stop: ${stop_loss:.4f}")
+
+            return qty
+
+        except Exception as e:
+            logger.error(f"❌ Enhanced position sizing error for {symbol}: {e}")
             return 0
+
     def check_emergency_conditions(self) -> bool:
         """Check if emergency stop should be triggered"""
         try:
@@ -3483,7 +7159,7 @@ class EnhancedAccountManager(AccountManager):
 🛡️ RISK MANAGEMENT:
    Daily Losses: ${self.daily_losses:.2f} / ${self.daily_loss_limit:.2f} ({daily_loss_pct:.1f}%)
    Emergency Stop: {emergency_status}
-   Risk Per Trade: {self.config.RISK_PER_TRADE * 100:.1f}%
+   Risk Per Trade: {self.config.RISK_PER_TRADE100:.1f}%
    Max Position Size: {self.config.MAX_POSITION_PCT100:.1f}%
 
 ⚙️ CONFIGURATION:
@@ -3540,7 +7216,7 @@ def create_account_manager(session, conservative: bool = False) -> EnhancedAccou
     
     if conservative:
         # Conservative settings for cautious trading
-        config.RISK_PER_TRADE = 0.015  # 1.5% risk per trade
+        config.RISK_PER_TRADE = 0.01  # 1% risk per trade
         config.MAX_POSITION_PCT = 0.10  # Max 10% per position
         config.MAX_PORTFOLIO_RISK = 0.30  # Max 30% portfolio risk
         config.EMERGENCY_STOP_DRAWDOWN = 0.03  # 3% emergency stop
@@ -3614,24 +7290,20 @@ def calculate_portfolio_risk(self):
 class OrderManager:
 
     def validate_position_size(self, symbol: str, qty: float, price: float) -> bool:
-        """Final safety validation before placing order"""
-        try:
+            """Final safety validation before placing order"""
             balance = self.account_manager.get_account_balance()['available']
             position_value = qty * price
             position_pct = (position_value / balance) * 100
-            
+        
             # Hard limits
             if position_pct > 20:  # Never more than 20% in one position
-                logger.error(f"❌ REJECTED: {symbol} position is {position_pct:.1f}% of account!")
-                return False
-            
-            if position_value > balance * 0.15:  # Warn if over 15%
-                logger.warning(f"⚠️ Large position: {symbol} is {position_pct:.1f}% of account")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Position validation error: {e}")
+            logger.error(f"❌ REJECTED: {symbol} position is {position_pct:.1f}% of account!")
             return False
+        
+        if position_value > balance * 0.15:  # Warn if over 15%
+            logger.warning(f"⚠️ Large position: {symbol} is {position_pct:.1f}% of account")
+        
+        return True
 
     def __init__(self, session, account_manager):
         self.session = session
@@ -3750,22 +7422,7 @@ class OrderManager:
                 
                 position_value = qty * current_price
                 
-                # POSITION SIZE PERCENTAGE VALIDATION
-                account_balance = self.account_manager.get_account_balance()['available']
-                position_pct = (position_value / account_balance) * 100
-                
-                # Validate position size
-                if position_pct > 10:  # Hard limit at 10%
-                    logger.error(f"❌ REJECTED: {symbol} would be {position_pct:.1f}% of account!")
-                    logger.error(f"   Position: ${position_value:.2f} | Balance: ${account_balance:.2f}")
-                    return None
-                
-                if position_pct > 8:  # Warning above 8%
-                    logger.warning(f"⚠️ Large position: {symbol} is {position_pct:.1f}% of account")
-                
-                logger.info(f"✅ Position check: {symbol} is {position_pct:.1f}% of account")
-                
-                if not self.account_manager.check_sufficient_balance(position_value):
+                if not self.account_manager.check_sufficient_balance(500):
                     logger.error(f"❌ Insufficient balance for {symbol} trade")
                     return None
                 
@@ -4043,6 +7700,91 @@ class HFQAccountManager:
             logger.error(f"❌ Error getting positions: {e}")
             return []
     
+        def calculate_position_size_safe(self, symbol: str, entry_price: float, 
+                                   stop_loss: float, risk_amount: Optional[float] = None, 
+                                   strategy_name: str = "Unknown") -> float:
+        """
+        Calculate position size with PROPER SAFETY LIMITS
+        - Risk 1.5% of account per trade
+        - Max 15% of account per position
+        """
+        try:
+            # Get current balance
+            balance_info = self.get_account_balance()
+            available_balance = balance_info['available']
+            
+            # Safety check
+            if available_balance <= self.config.MIN_BALANCE_REQUIRED:
+                logger.error(f"❌ Insufficient balance: ${available_balance:.2f}")
+                return 0
+            
+            # 1. Calculate risk amount (1.5% of balance)
+            if risk_amount is None:
+                risk_amount = available_balance * self.config.RISK_PER_TRADE  # 0.015 = 1.5%
+            
+            # 2. Calculate stop loss distance
+            stop_distance = abs(entry_price - stop_loss)
+            if stop_distance <= 0:
+                logger.error(f"❌ Invalid stop distance for {symbol}")
+                return 0
+            
+            # 3. Calculate position size based on risk
+            position_size = risk_amount / stop_distance
+            
+            # 4. CRITICAL: Apply position value limit (15% of account max)
+            position_value = position_size * entry_price
+            max_allowed_value = available_balance * self.config.MAX_POSITION_PCT  # 0.15 = 15%
+            
+            if position_value > max_allowed_value:
+                # Reduce position size to stay within limit
+                position_size = max_allowed_value / entry_price
+                position_value = position_size * entry_price
+                logger.warning(f"⚠️ Position reduced to ${position_value:.2f} (15% limit)")
+            
+            # 5. Get symbol precision
+            precision, min_qty = self.get_symbol_precision(symbol)
+            position_size = max(round(position_size, precision), min_qty)
+            
+            # 6. Final safety check
+            final_position_value = position_size * entry_price
+            if final_position_value > available_balance * 0.20:  # Absolute safety limit
+                logger.error(f"❌ Position still too large: ${final_position_value:.2f}")
+                return 0
+            
+            # Log the calculation
+            position_pct = (final_position_value / available_balance) * 100
+            risk_pct = (risk_amount / available_balance) * 100
+            
+            logger.info(f"✅ {symbol} Position Calculation ({strategy_name}):")
+            logger.info(f"   Balance: ${available_balance:.2f}")
+            logger.info(f"   Risk Amount: ${risk_amount:.2f} ({risk_pct:.1f}%)")
+            logger.info(f"   Entry: ${entry_price:.4f} | Stop: ${stop_loss:.4f}")
+            logger.info(f"   Position Size: {position_size}")
+            logger.info(f"   Position Value: ${final_position_value:.2f} ({position_pct:.1f}% of balance)")
+            
+            return position_size
+            
+        except Exception as e:
+            logger.error(f"❌ Position sizing error for {symbol}: {e}")
+            return 0            if risk_amount is None:
+                risk_amount = available * 0.015  # 1.5% risk
+            
+            risk_per_unit = abs(entry_price - stop_loss)
+            if risk_per_unit <= 0:
+                return 0
+            
+            qty = risk_amount / risk_per_unit
+            
+            position_value = qty * entry_price
+            if position_value > available * 0.15:
+                qty = (available * 0.15) / entry_price
+            
+            return max(qty, 0.001)
+            
+        except Exception as e:
+            logger.error(f"Position sizing error: {e}")
+            return 0
+    
     def check_sufficient_balance(self, position_value, leverage=10):
         """Check if sufficient balance for position"""
         try:
@@ -4106,8 +7848,8 @@ class HFQAccountManager:
         try:
             # Cache key for precision data
             cache_key = f"precision_{symbol}"
-            if hasattr(self, f"precision_{symbol}"):
-                return getattr(self, f"precision_{symbol}")
+            if hasattr(self, cache_key):
+                return getattr(self, cache_key)
             
             info = self.bybit_session.get_instruments_info(
                 category="linear",
@@ -4126,7 +7868,7 @@ class HFQAccountManager:
                     precision = len(str(qty_step).split('.')[1]) if '.' in str(qty_step) else 0
                 
                 result = (precision, min_qty)
-                setattr(self, f"precision_{symbol}", result)
+                setattr(self, cache_key, result)
                 return result
             
             # Default fallback
@@ -4342,7 +8084,7 @@ class EnhancedMultiStrategyTradingBot:
                 logger.error(f"🚨 EMERGENCY STOP: Too many consecutive losses: {self.consecutive_losses}")
                 return True
             
-            if self.total_trades_today >= 10:  # Ultra-quality limit
+            if self.total_trades_today >= 150:
                 logger.warning(f"🛑 Daily trade limit reached: {self.total_trades_today}")
                 return True
             
@@ -4364,7 +8106,7 @@ class EnhancedMultiStrategyTradingBot:
                 logger.error("🛑 Emergency conditions detected - stopping entry scanning")
                 return
             
-            if self.account_manager.get_account_balance()["available"] < config.min_required_balance:
+            if not self.account_manager.check_sufficient_balance(500):
                 logger.warning("⚠️ Insufficient balance - skipping entry scan")
                 return
             
@@ -4385,9 +8127,9 @@ class EnhancedMultiStrategyTradingBot:
             # Get symbols not currently in positions
             position_symbols = {pos["symbol"] for pos in positions}
             # Collect all symbols from all strategies
-            # Use all configured symbols for all strategies
-            all_strategy_symbols = set(config.symbols)
-            # all_strategy_symbols.update(strategy.config.symbols)
+            all_strategy_symbols = set()
+            for strategy in self.strategies.values():
+                all_strategy_symbols.update(strategy.config.symbols)
             available_symbols = [s for s in all_strategy_symbols if s not in position_symbols]
                         
             if not available_symbols:
@@ -4689,9 +8431,6 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"   Remaining Daily Loss: ${config.daily_loss_cap + self.daily_realized_pnl:,.2f}")
             
             # Position Status with Strategy Breakdown
-            # Profit metrics
-            self.calculate_profit_metrics()
-            
             logger.info(f"🔄 POSITION STATUS:")
             logger.info(f"   Total Open Positions: {len(positions)}/{config.max_concurrent_trades}")
             
@@ -4732,45 +8471,6 @@ class EnhancedMultiStrategyTradingBot:
         except Exception as e:
             logger.error(f"❌ Summary error: {e}")
     
-
-    def calculate_profit_metrics(self):
-        """Calculate and display profit metrics"""
-        try:
-            if self.total_trades_today > 0:
-                win_rate = (self.profitable_trades / self.total_trades_today) * 100
-                
-                # Calculate totals from positions
-                positions = self.account_manager.get_open_positions()
-                total_unrealized = sum(pos["pnl"] for pos in positions)
-                
-                # Estimate average win/loss
-                losing_trades = self.total_trades_today - self.profitable_trades
-                avg_win = abs(self.daily_realized_pnl / max(self.profitable_trades, 1)) if self.profitable_trades > 0 and self.daily_realized_pnl > 0 else 0
-                avg_loss = abs(self.daily_realized_pnl / max(losing_trades, 1)) if losing_trades > 0 and self.daily_realized_pnl < 0 else 0
-                
-                # Profit factor
-                total_wins = self.profitable_trades * avg_win if avg_win > 0 else 0
-                total_losses = losing_trades * avg_loss if avg_loss > 0 else 1
-                profit_factor = total_wins / max(total_losses, 1)
-                
-                logger.info(f"💰 PROFIT METRICS:")
-                logger.info(f"   Win Rate: {win_rate:.1f}%")
-                logger.info(f"   Winning Trades: {self.profitable_trades}/{self.total_trades_today}")
-                logger.info(f"   Avg Win: ${avg_win:.2f}")
-                logger.info(f"   Avg Loss: ${avg_loss:.2f}")
-                logger.info(f"   Profit Factor: {profit_factor:.2f}")
-                logger.info(f"   Daily Realized P&L: ${self.daily_realized_pnl:+,.2f}")
-                logger.info(f"   Unrealized P&L: ${total_unrealized:+,.2f}")
-                logger.info(f"   Total P&L: ${self.daily_realized_pnl + total_unrealized:+,.2f}")
-                
-                # Per trade average
-                if self.total_trades_today > 0:
-                    avg_trade = self.daily_realized_pnl / self.total_trades_today
-                    logger.info(f"   Avg Trade P&L: ${avg_trade:+.2f}")
-                
-        except Exception as e:
-            logger.error(f"Error calculating profit metrics: {e}")
-
     def run(self):
         """Main multi-strategy bot execution loop"""
         logger.info("🚀 Starting ENHANCED MULTI-STRATEGY TRADING BOT v3.0.0")
@@ -4782,7 +8482,7 @@ class EnhancedMultiStrategyTradingBot:
 
         # Calculate 10% of account balance for daily loss cap
         logger.info(f"   Daily Loss Cap: 10% of account balance")
-        logger.info(f"   Total Symbols: 12")
+        logger.info(f"   Total Symbols: 14")
         logger.info(f"   Testnet Mode: {API_CONFIG['testnet']}")
         
         # Strategy details
@@ -4991,27 +8691,6 @@ class EnhancedMultiStrategyTradingBot:
 # =====================================
 # MAIN EXECUTION WITH ENHANCED SAFETY
 # =====================================
-
-
-# HFQ Quality Monitoring
-def log_hfq_quality_metrics():
-    """Log HFQ quality metrics for monitoring"""
-    total_scans = scan_count * len(config.symbols)
-    signals_generated = sum(s.signals_generated for s in strategies.values())
-    trades_executed = total_trades_today
-    
-    if total_scans > 0:
-        selectivity_rate = (trades_executed / total_scans) * 100
-    else:
-        selectivity_rate = 0
-    
-    logger.info(f"📊 HFQ QUALITY METRICS:")
-    logger.info(f"   Total Scans: {total_scans:,}")
-    logger.info(f"   Signals Generated: {signals_generated}")
-    logger.info(f"   Trades Executed: {trades_executed}")
-    logger.info(f"   Selectivity Rate: {selectivity_rate:.2f}%")
-    logger.info(f"   Quality Target: <1% of scans should trade")
-
 
 if __name__ == "__main__":
     try:
