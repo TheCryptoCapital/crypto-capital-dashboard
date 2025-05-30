@@ -6626,7 +6626,7 @@ class AccountManagerConfig:
     """Professional configuration class for AccountManager"""
     def __init__(self):
         # Risk Management Settings
-        self.RISK_PER_TRADE = 0.01  # 1% risk per trade
+        self.RISK_PER_TRADE = 0.0155  # 1.5% risk per trade
         self.MAX_POSITION_PCT = 0.08  # Max 8% of balance per position
         self.MAX_PORTFOLIO_RISK = 0.50  # Max 50% total portfolio exposure
         self.MIN_BALANCE_REQUIRED = 500  # Minimum account balance
@@ -7146,7 +7146,7 @@ def create_account_manager(session, conservative: bool = False) -> EnhancedAccou
     
     if conservative:
         # Conservative settings for cautious trading
-        config.RISK_PER_TRADE = 0.01  # 1% risk per trade
+        config.RISK_PER_TRADE = 0.0155  # 1% risk per trade
         config.MAX_POSITION_PCT = 0.10  # Max 10% per position
         config.MAX_PORTFOLIO_RISK = 0.30  # Max 30% portfolio risk
         config.EMERGENCY_STOP_DRAWDOWN = 0.03  # 3% emergency stop
