@@ -8045,6 +8045,16 @@ class EnhancedMultiStrategyTradingBot:
         self.consecutive_losses = 0
         self.start_time = datetime.now()
         self.last_heartbeat = datetime.now()
+        
+        # Strategy performance tracking
+        self.strategy_stats = defaultdict(lambda: {
+            'trades': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0
+        })
+        
+        # Performance tracking
+        self.max_drawdown = 0
+        self.peak_balance = 0
+        self.daily_high_water_mark = 0
         self.emergency_stop = False
         
 
@@ -8099,19 +8109,6 @@ class EnhancedMultiStrategyTradingBot:
         except Exception as e:
             logger.error(f"Time filter error: {e}")
             return True  # Default to allowing trades if error
-        # Strategy performance tracking
-        self.strategy_stats = defaultdict(lambda: {
-            'trades': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0
-        })
-        
-        # Performance tracking
-        self.max_drawdown = 0
-        self.peak_balance = 0
-        self.daily_high_water_mark = 0
-        
-        logger.info(f"🎯 Multi-Strategy Bot initialized with {len(self.strategies)} strategies:")
-        for strategy_type, strategy in self.strategies.items():
-            logger.info(f"   ✅ {strategy.config.name} - Max Positions: {strategy.config.max_positions}")
         
     def check_emergency_conditions(self) -> bool:
         """Check for emergency stop conditions"""
@@ -8143,10 +8140,10 @@ class EnhancedMultiStrategyTradingBot:
         """Enhanced entry scanning across all strategies"""
         try:
             # Time-based trading filter
-            if not self.should_trade_now():
-                current_hour = datetime.now(timezone.utc).hour
-                logger.info(f"🕐 Outside optimal trading hours (UTC {current_hour}:00) - skipping scan")
-                return
+#             if not self.should_trade_now():
+#                 current_hour = datetime.now(timezone.utc).hour
+#                 logger.info(f"🕐 Outside optimal trading hours (UTC {current_hour}:00) - skipping scan")
+#                 return
 
             if self.emergency_stop or self.check_emergency_conditions():
                 logger.error("🛑 Emergency conditions detected - stopping entry scanning")
