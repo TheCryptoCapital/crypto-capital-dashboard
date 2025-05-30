@@ -552,8 +552,6 @@ class TechnicalAnalysis:
             start_time = time.time()
         
             # ✅ NEW V5 API DIRECT CALL:
-            import requests
-            import os
         
             # Use V5 endpoints
             base_url = "https://api.bybit.com"
@@ -950,7 +948,11 @@ class TechnicalAnalysis:
             }
 
 # Initialize Technical Analysis Engine
+# Initialize global trailing stop manager
+trailing_stop_manager = None
 ta_engine = TechnicalAnalysis(session)
+# Global trailing stop manager
+trailing_stop_manager = None
 logger.info("�� Technical Analysis Engine initialized for HF trading")
 
 # =====================================
@@ -1666,6 +1668,7 @@ class StrategyConfig:
     ])
 
 class EliteStrategyConfig(StrategyConfig):
+    SAFE_MARGIN_USAGE = 0.20  # Use 20% of available balance for margin
     """🚀 ELITE HFQ CONFIGURATION - Maximum Performance for High-Frequency Quantitative Trading
     
     Optimized for:
@@ -1761,36 +1764,26 @@ class EliteStrategyConfig(StrategyConfig):
         # Initialize parent class first
         super().__init__(name, max_positions, position_value, min_confidence, 
                          enabled, signal_cache_seconds, 
-                         max_daily_trades, max_drawdown_pct, allowed_symbols or [])
+                         max_daily_trades, max_drawdown_pct, scan_symbols or [])
+        self.scan_symbols = scan_symbols or ["BTCUSDT", "ETHUSDT"]
+        self.timeframe = timeframe
         self.risk_per_trade_pct = risk_per_trade_pct
 
-        # Initialize elite-specific attributes
-#         self.profit_target_pct = profit_target_pct
-        self.max_loss_pct = max_loss_pct
+        
+        # AccountManager compatibility attributes (uppercase)
+        self.MIN_BALANCE_REQUIRED = 500  # Default minimum balance
         self.leverage = leverage
-        self.timeframe = timeframe
-        self.min_signal_strength = min_signal_strength
-        self.regime_adaptive = regime_adaptive
-        self.ml_filter = ml_filter
-        self.microstructure_boost = microstructure_boost
-        self.cross_asset_correlation = cross_asset_correlation
-        self.news_integration = news_integration
-        self.funding_aware = funding_aware
-        self.max_drawdown_stop = max_drawdown_stop
-        self.volatility_scaling = volatility_scaling
-        self.kelly_sizing = kelly_sizing
-        self.correlation_limit = correlation_limit
-        self.latency_critical = latency_critical
-        self.smart_routing = smart_routing
-        self.execution_alpha = execution_alpha
-        self.min_sharpe_threshold = min_sharpe_threshold
-        self.max_var_95 = max_var_95
-        self.daily_trade_limit = daily_trade_limit
-        self.auto_parameter_tuning = auto_parameter_tuning
-        self.performance_feedback = performance_feedback
-        self.regime_weight_adjustment = regime_weight_adjustment
-        self.scan_symbols = scan_symbols or ["BTCUSDT", "ETHUSDT"]
-        self.min_quality_score = min_quality_score
+        self.enabled = enabled
+        self.name = name
+        self.position_value = position_value
+        self.max_positions = max_positions
+        self.DAILY_LOSS_LIMIT_PCT = 0.10  # 10% daily loss limit
+        self.RISK_PER_TRADE = self.risk_per_trade_pct / 100 if hasattr(self, 'risk_per_trade_pct') else 0.015
+        self.MAX_POSITION_PCT = 0.15  # 15% max position
+        self.MAX_PORTFOLIO_RISK = 0.50  # 50% max portfolio risk
+        self.EMERGENCY_STOP_DRAWDOWN = 0.05  # 5% emergency stop
+        self.MAX_CONCURRENT_POSITIONS = 15  # Max concurrent positions
+        
         self.excellent_quality = excellent_quality
         self.elite_quality = elite_quality 
         self.max_loss_pct = self.risk_per_trade_pct  # Percentage only!
@@ -1802,7 +1795,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.position_sizing_method = position_sizing_method
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
-        self.symbols = self.scan_symbols  # Use the existing scan_symbols
+        self.symbols = self.scan_symbols
         self.min_required_balance = 500
         self.daily_loss_cap = 0.10  # 10% daily loss cap
         self.trading_mode = 'moderate'  # Trading mode
@@ -1995,17 +1988,17 @@ class BaseStrategy:
     
     def is_enabled(self) -> bool:
         """Check if strategy is enabled and within limits"""
-        if not self.config.enabled:
+        if not config.enabled:
             return False
         
         # Check daily trade limit
-        if self.trades_today >= self.config.max_daily_trades:
-            self.logger.warning(f"Daily trade limit reached for {self.config.name}")
+        if self.trades_today >= config.max_daily_trades:
+            self.logger.warning(f"Daily trade limit reached for {config.name}")
             return False
         
         # Check drawdown limit
-        if self.max_drawdown >= self.config.max_drawdown_pct:
-            self.logger.warning(f"Max drawdown reached for {self.config.name}")
+        if self.max_drawdown >= config.max_drawdown_pct:
+            self.logger.warning(f"Max drawdown reached for {config.name}")
             return False
         
         return True
@@ -2016,7 +2009,7 @@ class BaseStrategy:
             return False
         
         # Symbol whitelist check
-        if symbol not in self.config.allowed_symbols:
+        if symbol not in config.allowed_symbols:
             return False
         
         # Rate limiting - don't analyze same symbol too frequently
@@ -2080,14 +2073,14 @@ class BaseStrategy:
                 self.signals_generated
             )
             
-            if signal in ['Buy', 'Sell'] and strength >= self.config.min_confidence:
-                self.logger.info(f"🎯 {self.config.name} SIGNAL: {symbol} {signal} "
+            if signal in ['Buy', 'Sell'] and strength >= config.min_confidence:
+                self.logger.info(f"🎯 {config.name} SIGNAL: {symbol} {signal} "
                                f"({strength:.2f}) [{self.strategy_type.value}]")
             
             return signal_result
             
         except Exception as e:
-            self.logger.error(f"❌ Analysis error for {symbol} [{self.config.name}]: {e}")
+            self.logger.error(f"❌ Analysis error for {symbol} [{config.name}]: {e}")
             return None
     
     async def get_market_data(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
@@ -2155,7 +2148,7 @@ class BaseStrategy:
                     return float(calc.size)
             
             # Fallback: Risk-based calculation
-            risk_amount = self.config.risk_per_trade  # $100 default
+            risk_amount = config.risk_per_trade  # $100 default
             stop_distance = abs(entry_price - stop_price)
             
             if stop_distance <= 0:
@@ -2168,12 +2161,12 @@ class BaseStrategy:
             # Apply minimum size constraints
             min_size = 0.001  # Default minimum, can be symbol-specific
             if hasattr(self.config, 'min_position_size'):
-                min_size = self.config.min_position_size
+                min_size = config.min_position_size
             
             position_size = max(position_size, min_size)
             
             # Apply maximum position value constraint
-            max_value_size = self.config.position_value / entry_price
+            max_value_size = config.position_value / entry_price
             position_size = min(position_size, max_value_size)
             
             self.logger.debug(f"💰 Position size for {symbol}: {position_size:.6f} "
@@ -2184,7 +2177,7 @@ class BaseStrategy:
         except Exception as e:
             self.logger.error(f"Error calculating position size: {e}")
             # Ultimate fallback
-            return self.config.position_value / entry_price
+            return config.position_value / entry_price
     
     def record_trade_result(self, symbol: str, entry_price: float, exit_price: float, 
                           side: str, position_size: float, success: bool):
@@ -2213,7 +2206,7 @@ class BaseStrategy:
             if current_drawdown > self.max_drawdown:
                 self.max_drawdown = current_drawdown
             
-            self.logger.info(f"📊 {self.config.name} Trade: {symbol} {side} "
+            self.logger.info(f"📊 {config.name} Trade: {symbol} {side} "
                            f"PnL: ${pnl:.2f} | Daily: ${self.daily_pnl:.2f}")
             
         except Exception as e:
@@ -2225,9 +2218,9 @@ class BaseStrategy:
         win_rate = (self.success_count / total_trades * 100) if total_trades > 0 else 0
         
         return {
-            'name': self.config.name,
+            'name': config.name,
             'type': self.strategy_type.value,
-            'enabled': self.config.enabled,
+            'enabled': config.enabled,
             
             # Trading metrics
             'trades_today': self.trades_today,
@@ -2244,10 +2237,10 @@ class BaseStrategy:
             'cache_size': len(self.signal_cache),
             
             # Configuration
-            'max_positions': self.config.max_positions,
-            'position_value': self.config.position_value,
-            'min_confidence': self.config.min_confidence,
-            'max_daily_trades': self.config.max_daily_trades
+            'max_positions': config.max_positions,
+            'position_value': config.position_value,
+            'min_confidence': config.min_confidence,
+            'max_daily_trades': config.max_daily_trades
         }
     
     def reset_daily_stats(self):
@@ -2260,7 +2253,7 @@ class BaseStrategy:
         self.peak_pnl = 0.0
         self.signals_generated = 0
         
-        self.logger.info(f"📅 Daily stats reset for {self.config.name}")
+        self.logger.info(f"📅 Daily stats reset for {config.name}")
     
     def cleanup_cache(self):
         """Clean up expired cache entries"""
@@ -2275,7 +2268,7 @@ class BaseStrategy:
             del self.signal_cache[symbol]
     
     def __str__(self):
-        return f"Strategy({self.config.name}, {self.strategy_type.value}, enabled={self.config.enabled})"
+        return f"Strategy({config.name}, {self.strategy_type.value}, enabled={config.enabled})"
     
     def __repr__(self):
         return self.__str__()
@@ -2475,7 +2468,7 @@ class RSIStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Buy", strength, analysis
                     
             elif current_rsi <= self.rsi_oversold_moderate and rsi_trend > 0:  # Moderate oversold with upturn
@@ -2492,7 +2485,7 @@ class RSIStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 0.9)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Buy", strength, analysis
             
             # BEARISH SIGNALS
@@ -2512,7 +2505,7 @@ class RSIStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Sell", strength, analysis
                     
             elif current_rsi >= self.rsi_overbought_moderate and rsi_trend < 0:  # Moderate overbought with downturn
@@ -2529,7 +2522,7 @@ class RSIStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 0.9)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Sell", strength, analysis
             
             return "Hold", 0.0, analysis
@@ -2819,7 +2812,7 @@ class EMAStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Buy", strength, analysis
             
             # BEARISH CROSSOVER SIGNAL
@@ -2858,7 +2851,7 @@ class EMAStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Sell", strength, analysis
             
             return "Hold", 0.0, analysis
@@ -3183,7 +3176,7 @@ class ScalpingStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Buy", strength, analysis
             
             # BEARISH SCALPING SIGNALS
@@ -3226,7 +3219,7 @@ class ScalpingStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Sell", strength, analysis
             
             return "Hold", 0.0, analysis
@@ -3649,7 +3642,7 @@ class MACDStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Buy", strength, analysis
             
             # BEARISH MACD MOMENTUM SIGNALS
@@ -3694,7 +3687,7 @@ class MACDStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Sell", strength, analysis
             
             return "Hold", 0.0, analysis
@@ -4107,7 +4100,7 @@ class BreakoutStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Buy", strength, analysis
             
             # BEARISH BREAKOUT SIGNALS
@@ -4150,7 +4143,7 @@ class BreakoutStrategy(BaseStrategy):
                 
                 strength = min(base_strength + sum(confirmations), 1.0)
                 
-                if strength >= self.config.min_confidence:
+                if strength >= config.min_confidence:
                     return "Sell", strength, analysis
             
             return "Hold", 0.0, analysis
@@ -6131,8 +6124,8 @@ STRATEGY_CONFIGS = {
 #         profit_target_pct=2.2,           # ↑ Optimized target
         max_loss_pct=0.8,               # ↓ Tighter stops with better entries
         leverage=12,                     # ↑ Higher leverage with better risk control
+        timeframe="3",
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
-        timeframe="3",                   # ↑ Optimized 3-minute timeframe
         min_signal_strength=0.05,        # ↑ Higher quality threshold
         regime_adaptive=True,
         ml_filter=True,
@@ -6814,8 +6807,7 @@ class EnhancedAccountManager(AccountManager):
     
     def __init__(self, session, config: Optional[AccountManagerConfig] = None):
         super().__init__(session)
-        self.config = config or AccountManagerConfig()
-
+        self.config = config or AccountManagerConfig()  # Create default if none provided
         # Validate configuration
         if not self.config.validate():
             raise ValueError("Invalid AccountManager configuration!")
@@ -6829,24 +6821,24 @@ class EnhancedAccountManager(AccountManager):
         self.risk_warnings = deque(maxlen=50)
 
         # Update cache duration from config
-        self.cache_duration = self.config.BALANCE_CACHE_DURATION
+        self.cache_duration = config.BALANCE_CACHE_DURATION
 
         # Calculate daily loss limit
         self._update_daily_loss_limit()
 
         logger.info("🎯 Enhanced AccountManager initialized")
-        logger.info(f"   Risk per trade: {self.config.RISK_PER_TRADE * 100:.1f}%")      # Line 6742 - RISK
-        logger.info(f"   Max position size: {self.config.MAX_POSITION_PCT * 100:.1f}%") # Line 6743 - POSITION SIZE  
-        logger.info(f"   Emergency stop at: {self.config.EMERGENCY_STOP_DRAWDOWN*100:.1f}% drawdown")
+        logger.info(f"   Risk per trade: {config.RISK_PER_TRADE * 100:.1f}%")      # Line 6742 - RISK
+        logger.info(f"   Max position size: {config.MAX_POSITION_PCT * 100:.1f}%") # Line 6743 - POSITION SIZE  
+        logger.info(f"   Emergency stop at: {config.EMERGENCY_STOP_DRAWDOWN*100:.1f}% drawdown")
 
     def _update_daily_loss_limit(self):
         """Update daily loss limit based on current balance"""
         try:
             balance_info = self.get_account_balance()
-            self.daily_loss_limit = balance_info['available'] * self.config.DAILY_LOSS_LIMIT_PCT
+            self.daily_loss_limit = balance_info['available'] * config.DAILY_LOSS_LIMIT_PCT
             logger.info(f"📊 Daily loss limit: ${self.daily_loss_limit:.2f}")
         except Exception as e:
-            self.daily_loss_limit = self.config.MIN_BALANCE_REQUIRED * self.config.DAILY_LOSS_LIMIT_PCT
+            self.daily_loss_limit = config.MIN_BALANCE_REQUIRED * config.DAILY_LOSS_LIMIT_PCT
             logger.warning(f"⚠️ Using fallback daily loss limit: ${self.daily_loss_limit:.2f}")
 
     def check_daily_reset(self):
@@ -6877,13 +6869,13 @@ class EnhancedAccountManager(AccountManager):
             available_balance = balance_info['available']
             
             # Safety check
-            if available_balance <= self.config.MIN_BALANCE_REQUIRED:
+            if available_balance <= config.MIN_BALANCE_REQUIRED:
                 logger.error(f"❌ Insufficient balance: ${available_balance:.2f}")
                 return 0
             
             # 1. Calculate risk amount (1.5% of balance)
             if risk_amount is None:
-                risk_amount = available_balance * self.config.RISK_PER_TRADE  # 0.015 = 1.5%
+                risk_amount = available_balance * config.RISK_PER_TRADE  # 0.015 = 1.5%
             
             # 2. Calculate stop loss distance
             stop_distance = abs(entry_price - stop_loss)
@@ -6896,7 +6888,7 @@ class EnhancedAccountManager(AccountManager):
             
             # 4. CRITICAL: Apply position value limit (15% of account max)
             position_value = position_size * entry_price
-            max_allowed_value = available_balance * self.config.MAX_POSITION_PCT  # 0.15 = 15%
+            max_allowed_value = available_balance * config.MAX_POSITION_PCT  # 0.15 = 15%
             
             if position_value > max_allowed_value:
                 # Reduce position size to stay within limit
@@ -6943,13 +6935,13 @@ class EnhancedAccountManager(AccountManager):
             available_balance = balance_info['available']
 
             # Balance check
-            if available_balance <= self.config.MIN_BALANCE_REQUIRED:
-                logger.error(f"❌ Insufficient balance: ${available_balance:.2f} < ${self.config.MIN_BALANCE_REQUIRED}")
+            if available_balance <= config.MIN_BALANCE_REQUIRED:
+                logger.error(f"❌ Insufficient balance: ${available_balance:.2f} < ${config.MIN_BALANCE_REQUIRED}")
                 return 0
 
             # Use configurable risk percentage
             if risk_amount is None:
-                risk_amount = available_balance * self.config.RISK_PER_TRADE
+                risk_amount = available_balance * config.RISK_PER_TRADE
 
             # Calculate position with enhanced safety checks
             risk_per_unit = abs(entry_price - stop_loss)
@@ -6964,7 +6956,7 @@ class EnhancedAccountManager(AccountManager):
 
             # Apply configurable max position size
             position_value = qty * entry_price
-            max_position_value = available_balance * self.config.MAX_POSITION_PCT
+            max_position_value = available_balance * config.MAX_POSITION_PCT
 
             if position_value > max_position_value:
                 logger.warning(f"⚠️ Reducing position size for {symbol}: ${position_value:.2f} -> ${max_position_value:.2f}")
@@ -6973,13 +6965,13 @@ class EnhancedAccountManager(AccountManager):
                 position_value = qty * entry_price
 
             # Check minimum position size
-            if position_value < self.config.MIN_POSITION_SIZE_USD:
-                logger.warning(f"❌ Position too small for {symbol}: ${position_value:.2f} < ${self.config.MIN_POSITION_SIZE_USD}")
+            if position_value < config.MIN_POSITION_SIZE_USD:
+                logger.warning(f"❌ Position too small for {symbol}: ${position_value:.2f} < ${config.MIN_POSITION_SIZE_USD}")
                 return 0
 
             # Portfolio risk check
             current_portfolio_risk = self.calculate_portfolio_risk()
-            if current_portfolio_risk >= self.config.MAX_PORTFOLIO_RISK * 100:
+            if current_portfolio_risk >= config.MAX_PORTFOLIO_RISK * 100:
                 logger.warning(f"❌ Portfolio risk limit reached: {current_portfolio_risk:.1f}%")
                 return 0
 
@@ -7015,7 +7007,7 @@ class EnhancedAccountManager(AccountManager):
             account_drawdown = abs(total_unrealized) / balance_info['available'] if balance_info['available'] > 0 else 0
 
             # Emergency stop if drawdown exceeds threshold
-            if account_drawdown >= self.config.EMERGENCY_STOP_DRAWDOWN:
+            if account_drawdown >= config.EMERGENCY_STOP_DRAWDOWN:
                 if not self.emergency_stop_triggered:
                     logger.error(f"🚨 EMERGENCY STOP TRIGGERED!")
                     logger.error(f"   Account Drawdown: {account_drawdown*100:.2f}%")
@@ -7055,7 +7047,7 @@ class EnhancedAccountManager(AccountManager):
                 current_drawdown = abs(total_unrealized) / balance_info['available'] if balance_info['available'] > 0 else 0
 
                 # Reset if drawdown improves significantly
-                if current_drawdown < self.config.EMERGENCY_STOP_DRAWDOWN * 0.5:
+                if current_drawdown < config.EMERGENCY_STOP_DRAWDOWN * 0.5:
                     self.emergency_stop_triggered = False
                     logger.info("✅ Emergency stop auto-reset - drawdown improved")
                     return True
@@ -7099,20 +7091,20 @@ class EnhancedAccountManager(AccountManager):
             balance_info = self.get_account_balance()
             available = balance_info['available']
 
-            if available < self.config.MIN_BALANCE_REQUIRED:
-                logger.warning(f"❌ Insufficient balance: ${available:.2f} < ${self.config.MIN_BALANCE_REQUIRED}")
+            if available < config.MIN_BALANCE_REQUIRED:
+                logger.warning(f"❌ Insufficient balance: ${available:.2f} < ${config.MIN_BALANCE_REQUIRED}")
                 return False
 
             required_margin = position_value / max(leverage, 1)
-            safe_margin_usage = available * self.config.SAFE_MARGIN_USAGE
+            safe_margin_usage = available * config.SAFE_MARGIN_USAGE
 
             if required_margin > safe_margin_usage:
                 logger.warning(f"❌ Margin too high. Need ${required_margin:.2f}, max allowed ${safe_margin_usage:.2f}")
                 return False
 
             # Check position size limit
-            if position_value > available * self.config.MAX_POSITION_PCT:
-                max_allowed = available * self.config.MAX_POSITION_PCT
+            if position_value > available * config.MAX_POSITION_PCT:
+                max_allowed = available * config.MAX_POSITION_PCT
                 logger.warning(f"❌ Position too large: ${position_value:.2f} > ${max_allowed:.2f}")
                 return False
 
@@ -7132,6 +7124,18 @@ class EnhancedAccountManager(AccountManager):
             if self.daily_losses >= self.daily_loss_limit * 0.8:
                 logger.warning(f"⚠️ Approaching daily loss limit: {(self.daily_losses/self.daily_loss_limit)*100:.1f}%")
 
+    
+    def get_balance_summary(self) -> str:
+        """Get quick balance summary"""
+        try:
+            balance = self.get_account_balance()
+            positions = self.get_open_positions()
+            total_pnl = sum(p.get('pnl', 0) for p in positions)
+            
+            return f"Available: ${balance['available']:.2f} | Total: ${balance['total']:.2f} | Positions: {len(positions)} | PnL: ${total_pnl:.2f}"
+        except Exception as e:
+            return "Balance unavailable"
+    
     def get_enhanced_summary(self) -> str:
         """Enhanced summary with comprehensive information"""
         try:
@@ -7160,13 +7164,13 @@ class EnhancedAccountManager(AccountManager):
 🛡️ RISK MANAGEMENT:
    Daily Losses: ${self.daily_losses:.2f} / ${self.daily_loss_limit:.2f} ({daily_loss_pct:.1f}%)
    Emergency Stop: {emergency_status}
-   Risk Per Trade: {self.config.RISK_PER_TRADE100:.1f}%
-   Max Position Size: {self.config.MAX_POSITION_PCT100:.1f}%
+   Risk Per Trade: {config.RISK_PER_TRADE100:.1f}%
+   Max Position Size: {config.MAX_POSITION_PCT100:.1f}%
 
 ⚙️ CONFIGURATION:
-   Min Balance Required: ${self.config.MIN_BALANCE_REQUIRED:,.2f}
-   Max Concurrent Positions: {self.config.MAX_CONCURRENT_POSITIONS}
-   Cache Duration: {self.config.BALANCE_CACHE_DURATION}s
+   Min Balance Required: ${config.MIN_BALANCE_REQUIRED:,.2f}
+   Max Concurrent Positions: {config.MAX_CONCURRENT_POSITIONS}
+   Cache Duration: {config.BALANCE_CACHE_DURATION}s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             """
             return summary.strip()
@@ -7288,6 +7292,7 @@ def calculate_portfolio_risk(self):
 # config.RISK_PER_TRADE = 0.025  # 2.5% risk
 # account_manager = EnhancedAccountManager(bybit_session, config)
 
+# Make TRAILING_CONFIGS accessible
 class OrderManager:
 
     def validate_position_size(self, symbol: str, qty: float, price: float) -> bool:
@@ -7310,10 +7315,11 @@ class OrderManager:
             logger.error(f"Position validation error: {e}")
             return False
 
-    def __init__(self, session, account_manager):
+    def __init__(self, session, account_manager, trailing_stop_manager=None, config=None):
         self.session = session
         self.bybit_session = bybit_session
         self.account_manager = account_manager
+#        # Initialize Enhanced Trailing Stop Manager
         self.precision_cache = {}
         self.order_history = deque(maxlen=2000)  # Increased for multi-strategy
         self.last_trade_time = defaultdict(int)
@@ -7344,8 +7350,31 @@ class OrderManager:
                 return None
             
             # Use trailing stop manager to calculate initial profitable stop
-            trail_config = trailing_stop_manager.get_trailing_config(strategy_name)
-            stop_pct = trail_config.initial_stop_pct / 100
+            if self.trailing_stop_manager:
+                # Get strategy-specific config from TRAILING_CONFIGS
+                from collections import defaultdict
+                strategy_key = strategy_name.upper().replace(' ', '_').replace('-', '_')
+                
+                # Map strategy names to config keys
+                strategy_mapping = {
+                    'RSI_QUANTUM_PRO': 'RSI_OVERSOLD',
+                    'EMA_NEURAL_ELITE': 'EMA_CROSSOVER',
+                    'LIGHTNING_SCALP_QUANTUM': 'SCALPING',
+                    'MACD_MOMENTUM_MASTER': 'MACD_MOMENTUM',
+                    'HFQ_VOLUME_SPIKE_ELITE': 'VOLUME_SPIKE',
+                    'HFQ_BOLLINGER_QUANTUM_PRO': 'BOLLINGER_BANDS',
+                    'HYBRID_COMPOSITE_MASTER': 'HYBRID_COMPOSITE'
+                }
+                
+                config_key = strategy_mapping.get(strategy_key, 'RSI_OVERSOLD')
+                
+                if config_key in TRAILING_CONFIGS:
+                    trail_config = TRAILING_CONFIGS[config_key]
+                    stop_pct = trail_config.initial_stop_pct / 100
+                else:
+                    stop_pct = 0.004  # Default 0.4% profit stop
+            else:
+                stop_pct = 0.004  # Default 0.4% profit stop
             
             if side == "Buy":
                 stop_price = entry_price * (1 + stop_pct)
@@ -7458,6 +7487,14 @@ class OrderManager:
                     
                     if fill_success:
                         # Initialize trailing stop tracking
+                        # Initialize trailing stop tracking with enhanced manager
+                        if self.trailing_stop_manager:
+                            entry_price = current_price
+                            self.trailing_stop_manager.initialize_position_tracking(
+                                symbol, entry_price, side, strategy_name, position_size=qty
+                            )
+                            logger.info(f"✅ Trailing stop tracking initialized for {symbol}")
+                        
                         trailing_stop_manager.initialize_position_tracking(
                             symbol, current_price, side, strategy_name
                         )
@@ -7719,13 +7756,13 @@ class HFQAccountManager:
             available_balance = balance_info['available']
             
             # Safety check
-            if available_balance <= self.config.MIN_BALANCE_REQUIRED:
+            if available_balance <= config.MIN_BALANCE_REQUIRED:
                 logger.error(f"❌ Insufficient balance: ${available_balance:.2f}")
                 return 0
             
             # 1. Calculate risk amount (1.5% of balance)
             if risk_amount is None:
-                risk_amount = available_balance * self.config.RISK_PER_TRADE  # 0.015 = 1.5%
+                risk_amount = available_balance * config.RISK_PER_TRADE  # 0.015 = 1.5%
             
             # 2. Calculate stop loss distance
             stop_distance = abs(entry_price - stop_loss)
@@ -7738,7 +7775,7 @@ class HFQAccountManager:
             
             # 4. CRITICAL: Apply position value limit (15% of account max)
             position_value = position_size * entry_price
-            max_allowed_value = available_balance * self.config.MAX_POSITION_PCT  # 0.15 = 15%
+            max_allowed_value = available_balance * config.MAX_POSITION_PCT  # 0.15 = 15%
             
             if position_value > max_allowed_value:
                 # Reduce position size to stay within limit
@@ -8030,9 +8067,15 @@ class EnhancedMultiStrategyTradingBot:
         self.session = session
         self.bybit_session = bybit_session
         self.account_manager = account_manager
-        self.order_manager = order_manager
+        
+        # Initialize Enhanced Trailing Stop Manager
+# self.session, ta_engine, self.config, logger
+        
+        # Now create order_manager with trailing_stop_manager
+        self.order_manager = OrderManager(session, account_manager, trailing_stop_manager, self.config)
+        
+        self.trailing_stop_manager = trailing_stop_manager
         self.trade_logger = trade_logger
-        self.trailing_stop_manager = TrailingStopManager()
         
         # Initialize all strategies
         self.strategies = StrategyFactory.create_all_strategies()
@@ -8045,6 +8088,7 @@ class EnhancedMultiStrategyTradingBot:
         self.consecutive_losses = 0
         self.start_time = datetime.now()
         self.last_heartbeat = datetime.now()
+        self.emergency_stop = False
         
         # Strategy performance tracking
         self.strategy_stats = defaultdict(lambda: {
@@ -8055,7 +8099,10 @@ class EnhancedMultiStrategyTradingBot:
         self.max_drawdown = 0
         self.peak_balance = 0
         self.daily_high_water_mark = 0
-        self.emergency_stop = False
+        
+        logger.info(f"🎯 Multi-Strategy Bot initialized with {len(self.strategies)} strategies:")
+        for strategy_type, strategy in self.strategies.items():
+            logger.info(f"   ✅ {strategy.config.name} - Max Positions: {strategy.config.max_positions}")
         
 
     def should_trade_now(self, signal_strength: float = 0.0) -> bool:
@@ -8250,6 +8297,7 @@ class EnhancedMultiStrategyTradingBot:
                     
                     # Calculate position size
                     balance_info = self.account_manager.get_account_balance()
+                    available_balance = balance_info["available"]
                     risk_amount = balance_info['available'] * (config.risk_per_trade_pct / 100)
                     
                     # Estimate stop loss for position sizing
@@ -8340,7 +8388,8 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
         
             # First, manage trailing stops for all positions
-            self.trailing_stop_manager.manage_all_trailing_stops(positions)
+            # Properly manage trailing stops
+            asyncio.create_task(self.trailing_stop_manager.manage_all_trailing_stops(positions))
             self.trailing_stop_manager.cleanup_closed_positions(positions)
  
             # Group positions by strategy for better reporting
@@ -8380,7 +8429,6 @@ class EnhancedMultiStrategyTradingBot:
                         # Regular max loss check
                         # Get balance for max loss calculation
                         balance_info = self.account_manager.get_account_balance()
-                        available_balance = balance_info["available"]
                         
                         max_loss = available_balance * 0.015
                         if unrealized_pnl <= -max_loss:
@@ -8891,14 +8939,30 @@ if __name__ == "__main__":
 
         # Initialize AccountManager
         logger.info("🤖 Initializing AccountManager...")
-        account_manager = EnhancedAccountManager(session)
+        am_config = AccountManagerConfig()
+        account_manager = EnhancedAccountManager(session, am_config)
+        logger.info("✅ AccountManager ready")
+        # Create AccountManager configuration
         logger.info(f"�� {account_manager.get_balance_summary() if hasattr(account_manager, 'get_balance_summary') else 'AccountManager ready'}")
 
+                # Initialize global trailing stop manager
+        logger.info("🎯 Initializing global trailing stop manager...")
+        trailing_stop_manager = EnhancedTrailingStopManager(
+            session=session,
+            market_data=ta_engine,
+            config=config,
+            logger=logger
+        )
+        logger.info("✅ Trailing stop manager ready")
+        
         # Initialize OrderManager
         logger.info("🔧 Initializing OrderManager...")
+        # Initialize trailing stop manager
+        
+        # Initialize order manager
         order_manager = OrderManager(session, account_manager)
         logger.info("✅ OrderManager ready")
-
+        
         bot = EnhancedMultiStrategyTradingBot()
         
         logger.info("�� Multi-Strategy Bot ready! Starting execution...")
