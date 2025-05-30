@@ -168,7 +168,7 @@ class TradingConfig:
     # Position Management - HF BOT OPTIMIZED
     max_position_value: float = 1200                 # ~$1200 max position (21% of balance)
     max_concurrent_trades: int = 15                  # 8 concurrent positions
-    profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
+# #     profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
     trail_lock_usd: float = 30                       # Lock $30 profit when trailing
     max_loss_per_trade: float = 86                   # $86 max loss (1.5% of $5,739)
     daily_loss_cap: float = 1500                     # $500 daily cap (8.7% of balance)
@@ -281,14 +281,14 @@ class TradingConfig:
     def calculate_dynamic_limits(self, current_balance: float):
         """Update limits based on current balance"""
         self.max_loss_per_trade = current_balance * (self.risk_per_trade_pct / 100)
-        self.profit_target_usd = current_balance * 0.01  # 1% of balance
+# #         self.profit_target_usd = current_balance * 0.01  # 1% of balance
         self.max_position_value = current_balance * 0.21  # 21% of balance
-        self.trail_lock_usd = self.profit_target_usd * 0.5  # Half of profit target
+# #         self.trail_lock_usd = self.profit_target_usd * 0.5  # Half of profit target
         self.daily_loss_cap = current_balance * 0.087  # 8.7% of balance
         
         logger.info(f"💰 Updated Limits for ${current_balance:,.2f} balance:")
         logger.info(f"   Max Loss Per Trade: ${self.max_loss_per_trade:.2f}")
-        logger.info(f"   Profit Target: ${self.profit_target_usd:.2f}")
+# #         logger.info(f"   Profit Target: ${self.profit_target_usd:.2f}")
         logger.info(f"   Max Position Value: ${self.max_position_value:.2f}")
         logger.info(f"   Daily Loss Cap: ${self.daily_loss_cap:.2f}")
 
@@ -1688,7 +1688,7 @@ class EliteStrategyConfig(StrategyConfig):
                  allowed_symbols = None,
                  
                  # 🎯 ELITE HFQ PERFORMANCE PARAMETERS
-                 profit_target_pct: float = 2.5,        # ↑ Higher targets with better signals
+#                  profit_target_pct: float = 2.5,        # ↑ Higher targets with better signals
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
@@ -1765,7 +1765,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.risk_per_trade_pct = risk_per_trade_pct
 
         # Initialize elite-specific attributes
-        self.profit_target_pct = profit_target_pct
+#         self.profit_target_pct = profit_target_pct
         self.max_loss_pct = max_loss_pct
         self.leverage = leverage
         self.timeframe = timeframe
@@ -1793,6 +1793,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.min_quality_score = min_quality_score
         self.excellent_quality = excellent_quality
         self.elite_quality = elite_quality 
+        self.max_loss_pct = self.risk_per_trade_pct  # Percentage only!
         self.moderate_spike_ratio = moderate_spike_ratio
         self.strong_spike_ratio = strong_spike_ratio
         self.institutional_spike_ratio = institutional_spike_ratio
@@ -2931,7 +2932,7 @@ class ScalpingStrategy(BaseStrategy):
         self.liquidity_threshold = 0.95    # Market liquidity requirement
         
         # Rapid exit criteria
-        self.quick_profit_target = 0.08    # 0.08% quick profit
+#         self.quick_profit_target = 0.08    # 0.08% quick profit
         self.momentum_decay_threshold = 0.5  # Exit when momentum decays 50%
         
     def calculate_multi_timeframe_momentum(self, df: pd.DataFrame) -> Dict:
@@ -3243,7 +3244,7 @@ class ScalpingStrategy(BaseStrategy):
                 profit_pct = (entry_price - current_price) / entry_price * 100
             
             # Quick profit target hit
-            if profit_pct >= self.quick_profit_target:
+#             if profit_pct >= self.quick_profit_target:
                 return True, f"Quick profit target hit: {profit_pct:.3f}%"
             
             # Additional exit logic could be added here
@@ -3267,7 +3268,7 @@ class ScalpingStrategy(BaseStrategy):
             'strong_momentum_pct': self.strong_momentum_pct,
             'min_volume_ratio': self.min_volume_ratio,
             'strong_volume_ratio': self.strong_volume_ratio,
-            'quick_profit_target': self.quick_profit_target,
+#             'quick_profit_target': self.quick_profit_target,
             'liquidity_threshold': self.liquidity_threshold
         }
         
@@ -6127,7 +6128,7 @@ STRATEGY_CONFIGS = {
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this    
-        profit_target_pct=2.2,           # ↑ Optimized target
+#         profit_target_pct=2.2,           # ↑ Optimized target
         max_loss_pct=0.8,               # ↓ Tighter stops with better entries
         leverage=12,                     # ↑ Higher leverage with better risk control
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
@@ -6148,7 +6149,7 @@ STRATEGY_CONFIGS = {
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
-        profit_target_pct=2.8,           # ↑ Higher targets with better timing
+#         profit_target_pct=2.8,           # ↑ Higher targets with better timing
         max_loss_pct=0.9,               # 1% stop loss distance
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
@@ -6168,7 +6169,7 @@ STRATEGY_CONFIGS = {
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
-        profit_target_pct=0.9,           # ↑ Slightly higher with better entries
+#         profit_target_pct=0.9,           # ↑ Slightly higher with better entries
         max_loss_pct=0.4,               # ↓ Extremely tight stops
         leverage=15,                     # ↑ Maximum leverage for scalping
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
@@ -6189,7 +6190,7 @@ STRATEGY_CONFIGS = {
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
-        profit_target_pct=3.2,           # ↑ Higher momentum targets
+#         profit_target_pct=3.2,           # ↑ Higher momentum targets
         max_loss_pct=1.0,               # 1% stop loss distance
         leverage=8,
         scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT"],
@@ -6210,7 +6211,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
-        profit_target_pct=1.8,           # ↑ Higher targets with better detection
+#         profit_target_pct=1.8,           # ↑ Higher targets with better detection
         max_loss_pct=0.8,
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
@@ -6230,7 +6231,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
-        profit_target_pct=2.3,           # ↑ Optimized mean reversion targets
+#         profit_target_pct=2.3,           # ↑ Optimized mean reversion targets
         max_loss_pct=0.9,
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "AVAXUSDT", "MATICUSDT"],
@@ -6250,7 +6251,7 @@ STRATEGY_CONFIGS = {
         enabled=True,
         max_positions=0,                 # Overlay strategy - adjusts others
         position_value=0,
-        profit_target_pct=0,
+#         profit_target_pct=0,
         max_loss_pct=0,
         leverage=1,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
@@ -6269,7 +6270,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this       
-        profit_target_pct=0.4,           # Small but consistent
+#         profit_target_pct=0.4,           # Small but consistent
         max_loss_pct=0.15,              # Very tight stops
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
@@ -6288,7 +6289,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this
-        profit_target_pct=1.8,           # Quick profits on news
+#         profit_target_pct=1.8,           # Quick profits on news
         max_loss_pct=0.7,
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
@@ -6308,7 +6309,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
         risk_per_trade_pct=1.5,               # ✅ ADD this        
-        profit_target_pct=1.8,           # Quick profits on news
+#         profit_target_pct=1.8,           # Quick profits on news
         max_loss_pct=0.7,
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
@@ -6328,7 +6329,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES
-        profit_target_pct=2.1,
+#         profit_target_pct=2.1,
         max_loss_pct=0.9,
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "LINKUSDT", "ADAUSDT"],
@@ -6350,7 +6351,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES
-        profit_target_pct=2.5,
+#         profit_target_pct=2.5,
         max_loss_pct=0.8,
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
@@ -6371,7 +6372,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES       
-        profit_target_pct=0.6,           # Quick scalp profits
+#         profit_target_pct=0.6,           # Quick scalp profits
         max_loss_pct=0.25,               # Very tight stops
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
@@ -6391,7 +6392,7 @@ STRATEGY_CONFIGS = {
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
         risk_per_trade_pct=1.5,               # ✅ YES             
-        profit_target_pct=0.3,                # Small but risk-free profits
+#         profit_target_pct=0.3,                # Small but risk-free profits
         max_loss_pct=0.1,                     # Minimal risk arbitrage
         leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
@@ -6411,7 +6412,7 @@ STRATEGY_CONFIGS = {
         enabled=False,                   # ← Keep disabled for now (can enable later)
         max_positions=1,
         position_value=0,
-        profit_target_pct=2.5,           # ↑ Higher target for breakouts
+#         profit_target_pct=2.5,           # ↑ Higher target for breakouts
         max_loss_pct=1.2,                # ↑ Slightly wider stop for volatility
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
@@ -6426,7 +6427,7 @@ STRATEGY_CONFIGS = {
         enabled=False,                   # ← Keep disabled (complex strategy)
         max_positions=1,
         position_value=0,
-        profit_target_pct=2.5,
+#         profit_target_pct=2.5,
         max_loss_pct=1.0,
         leverage=7,
         scan_symbols=["BTCUSDT", "ETHUSDT"],
@@ -6776,8 +6777,8 @@ class AccountManager:
         """Get symbol precision with caching"""
         try:
             cachekey = f"precision{symbol}"
-            if hasattr(self, cache_key):
-                return getattr(self, cache_key)
+            if hasattr(self, f"precision_{symbol}"):
+                return getattr(self, f"precision_{symbol}")
 
             info = self.bybit_session.get_instruments_info(
                 category="linear",
@@ -7853,7 +7854,7 @@ class MultiStrategySignalGenerator:
                         'timeframe': timeframe,
                         'config': {
                             'position_value': strategy.config.position_value,
-                            'profit_target': strategy.config.profit_target_pct,
+#                             'profit_target': strategy.config.profit_target_pct,
                             'max_loss': strategy.config.max_loss_pct,
                             'leverage': strategy.config.leverage
                         }
@@ -8065,7 +8066,7 @@ class EnhancedMultiStrategyTradingBot:
                     logger.info(f"🚀 [{strategy_name}] {side} SIGNAL: {symbol} @ ${current_price:.4f}")
                     logger.info(f"   Signal Strength: {strength:.2f}")
                     logger.info(f"   Position Value: ${config_data['position_value']}")
-                    logger.info(f"   Profit Target: {config_data['profit_target']}%")
+#                     logger.info(f"   Profit Target: {config_data['profit_target']}%")
                     logger.info(f"   Max Loss: {config_data['max_loss']}%")
                     
                     # Calculate position size
@@ -8089,7 +8090,7 @@ class EnhancedMultiStrategyTradingBot:
                     
                     # Calculate final stop loss and take profit
                     final_stop_loss = self.order_manager.calculate_safe_stop_loss(
-                        symbol, current_price, side, config.max_loss_per_trade, qty, strategy_name
+                        symbol, current_price, side, (available_balance * (getattr(config, "max_loss_pct", 1.5) / 100)), qty, strategy_name
                     )
                     
                     if final_stop_loss is None:
@@ -8097,12 +8098,13 @@ class EnhancedMultiStrategyTradingBot:
                         continue
                     
                     # Calculate take profit
-                    profit_target_usd = config_data['position_value'] * (config_data['profit_target'] / 100)
-                    if side == "Buy":
-                        take_profit_price = current_price + (profit_target_usd / qty)
-                    else:
-                        take_profit_price = current_price - (profit_target_usd / qty)
-                    
+# #                     profit_target_usd = config_data['position_value'] * (config_data['profit_target'] / 100)
+#                     if side == "Buy":
+# # #                         take_profit_price = current_price + (profit_target_usd / qty)
+#                     else:
+# # #                         take_profit_price = current_price - (profit_target_usd / qty)
+#                     
+                    take_profit_price = None  # Using trailing stops instead
                     logger.info(f"   Final Quantity: {qty}")
                     logger.info(f"   Stop Loss: ${final_stop_loss:.4f}")
                     logger.info(f"   Take Profit: ${take_profit_price:.4f}")
@@ -8143,16 +8145,20 @@ class EnhancedMultiStrategyTradingBot:
         """Enhanced position management with multiple safety layers and trailing stops"""
         try:
             positions = self.account_manager.get_open_positions()
-            
+        
             if not positions:
                 return
-            
+        
+            # Get balance for percentage calculations
+            balance_info = self.account_manager.get_account_balance()
+            available_balance = balance_info["available"]
+        
             logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
-            
+        
             # First, manage trailing stops for all positions
             self.trailing_stop_manager.manage_all_trailing_stops(positions)
             self.trailing_stop_manager.cleanup_closed_positions(positions)
-            
+ 
             # Group positions by strategy for better reporting
             positions_by_strategy = defaultdict(list)
             for pos in positions:
@@ -8176,7 +8182,7 @@ class EnhancedMultiStrategyTradingBot:
                                   f"Current: ${current:.4f} | P&L: ${unrealized_pnl:+.2f} ({pnl_pct:+.2f}%)")
                         
                         # EMERGENCY STOP LOSS
-                        emergency_loss_threshold = -config.max_loss_per_trade * config.emergency_stop_loss_multiplier
+                        emergency_loss_threshold = -(available_balance * 0.0225)  # 2.25% emergency stop
                         if unrealized_pnl <= emergency_loss_threshold:
                             logger.error(f"🚨 [{strategy_name}] EMERGENCY STOP for {symbol}: ${unrealized_pnl:.2f}")
                             if self.order_manager.close_position(symbol, side, qty, strategy_name):
@@ -8200,7 +8206,7 @@ class EnhancedMultiStrategyTradingBot:
                             continue
                         
                         # Profit management - let trailing stops handle most of this
-                        if unrealized_pnl >= config.profit_target_usd:
+# #                         if unrealized_pnl >= config.profit_target_usd:
                             logger.info(f"📈 [{strategy_name}] PROFIT TARGET HIT for {symbol}: ${unrealized_pnl:.2f}")
                             
                             # Check if trailing is active
@@ -8310,7 +8316,7 @@ class EnhancedMultiStrategyTradingBot:
                     
                     for pos in strategy_positions:
                         pnl_indicator = "🟢" if pos["pnl"] >= 0 else "🔴"
-                        risk_level = "🚨" if pos["pnl"] <= -config.max_loss_per_trade * 0.8 else ""
+                        risk_level = "🚨" if pos["pnl"] <= -(available_balance * (getattr(config, "max_loss_pct", 1.5) / 100)) * 0.8 else ""
                         
                         # Check trailing status
                         tracking = self.trailing_stop_manager.position_tracking.get(pos['symbol'], {})
@@ -8359,7 +8365,7 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"   ✅ {strategy.config.name}")
             logger.info(f"      Max Positions: {strategy.config.max_positions}")
             logger.info(f"      Position Value: ${strategy.config.position_value}")
-            logger.info(f"      Profit Target: {strategy.config.profit_target_pct}%")
+#             logger.info(f"      Profit Target: {strategy.config.profit_target_pct}%")
             logger.info(f"      Max Loss: {strategy.config.max_loss_pct}%")
             logger.info(f"      Leverage: {strategy.config.leverage}x")
             logger.info(f"      Symbols: {len(strategy.config.scan_symbols) if strategy.config.scan_symbols else 'All'}")
@@ -8499,7 +8505,7 @@ class EnhancedMultiStrategyTradingBot:
                     'win_rate': strategy_info['win_rate'],
                     'max_positions': strategy.config.max_positions,
                     'position_value': strategy.config.position_value,
-                    'profit_target': strategy.config.profit_target_pct,
+#                     'profit_target': strategy.config.profit_target_pct,
                     'max_loss': strategy.config.max_loss_pct,
                     'leverage': strategy.config.leverage
                 }
@@ -8613,7 +8619,7 @@ if __name__ == "__main__":
             warnings.append(f"High leverage strategies detected: {', '.join(high_leverage_strategies)}")
         
         # Check daily loss cap vs potential losses
-        max_potential_daily_loss = len([c for c in STRATEGY_CONFIGS.values() if c.enabled]) * config.max_loss_per_trade
+        max_potential_daily_loss = len([c for c in STRATEGY_CONFIGS.values() if c.enabled]) * (config.min_required_balance * (getattr(config, "max_loss_pct", 1.5) / 100))
         if max_potential_daily_loss > config.daily_loss_cap:
             config_issues.append(f"Potential daily losses (${max_potential_daily_loss}) exceed daily cap (${config.daily_loss_cap})")
         
@@ -8761,7 +8767,7 @@ def run_strategy_test():
             logger.info(f"📊 {strategy.config.name}:")
             logger.info(f"   Signal: {signal} (Strength: {strength:.3f})")
             logger.info(f"   Config: ${strategy.config.position_value} | {strategy.config.leverage}x leverage")
-            logger.info(f"   Targets: +{strategy.config.profit_target_pct}% / -{strategy.config.max_loss_pct}%")
+#             logger.info(f"   Targets: +{strategy.config.profit_target_pct}% / -{strategy.config.max_loss_pct}%")
             logger.info(f"   Analysis: {list(analysis.keys()) if analysis else 'None'}")
             logger.info(f"   Status: {'✅ ENABLED' if strategy.config.enabled else '❌ DISABLED'}")
             
