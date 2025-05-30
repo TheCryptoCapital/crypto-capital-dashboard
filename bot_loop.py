@@ -209,7 +209,7 @@ class TradingConfig:
     
     # HIGH-FREQUENCY SAFETY
     max_consecutive_losses: int = 8                  # Higher - more trades expected
-    daily_trade_limit: int = 150                     # ✅ 150 trades target
+    daily_trade_limit: int = 25                     # ✅ 150 trades target
     min_time_between_trades: int = 8                 # Faster - bot can handle it
     max_trades_per_minute: int = 6                   # Rate limiting
     api_rate_limit_buffer: float = 0.8               # Use 80% of API limits
@@ -1823,7 +1823,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_sizing_method="risk_based",
             risk_per_trade_pct=1.5,
             min_confidence=0.75,
-            max_daily_trades=80,
+            max_daily_trades=8,
             signal_cache_seconds=15,
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
@@ -1839,7 +1839,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         position_sizing_method="risk_based",         # ✅ Enable HFQ sizing
         risk_per_trade_pct=1.5,                      # ✅ 1.5% of balance per trade
         min_confidence=0.65,
-        max_daily_trades=20,                         # Lower frequency for swing trades
+        max_daily_trades=5,                         # Lower frequency for swing trades
         signal_cache_seconds=60,                     # Longer cache for swing signals
         allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT', 'XRPUSDT', 'LINKUSDT',
@@ -1855,7 +1855,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_sizing_method="risk_based",         # ✅ Enables % balance sizing
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
             min_confidence=0.8,
-            max_daily_trades=120,                        # Highest frequency
+            max_daily_trades=10,                        # Highest frequency
             signal_cache_seconds=10,                     # Very short cache
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT', 'MATICUSDT', 'XRPUSDT',
@@ -1872,7 +1872,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         position_sizing_method="risk_based",         # ✅ Use risk-based logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
             min_confidence=0.7,
-            max_daily_trades=30,                         # Medium frequency
+            max_daily_trades=6,                         # Medium frequency
             signal_cache_seconds=45,                     # Medium cache
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'LINKUSDT', 'MATICUSDT', 'UNIUSDT',
@@ -1890,7 +1890,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_sizing_method="risk_based",         # ✅ Risk-based sizing logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% risk per trade
             min_confidence=0.72,
-            max_daily_trades=40,
+            max_daily_trades=5,
             signal_cache_seconds=25,
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT', 'XRPUSDT', 'LINKUSDT',
@@ -1906,7 +1906,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_value=0,                  # Max position cap
             min_confidence=0.70,               # 70% minimum quality
             risk_per_trade=1.5,                # 1.5% risk per trade
-            max_daily_trades=150,              # ✅ Your 150 trades/day target
+            max_daily_trades=10,              # ✅ Your 150 trades/day target
             signal_cache_seconds=5,            # Fast 5-second scanning
             max_drawdown_pct=12.0,             # 12% max portfolio risk
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
@@ -1934,7 +1934,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             max_positions=1,
             position_value=220.0,
             min_confidence=0.73,
-            max_daily_trades=45,
+            max_daily_trades=7,
             signal_cache_seconds=30,
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'LINKUSDT'],
             max_drawdown_pct=5.5
@@ -1946,7 +1946,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             max_positions=1,
             position_value=300.0,
             min_confidence=0.78,
-            max_daily_trades=25,
+            max_daily_trades=5,
             signal_cache_seconds=40,
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'],
             max_drawdown_pct=6.5
