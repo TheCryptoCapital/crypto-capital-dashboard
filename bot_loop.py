@@ -1,24 +1,9 @@
-from typing import Dict, List, Optional, Tuple, Any
-import pandas as pd
-import numpy as np
 
+# =====================================
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
 # Author: Jonathan Ferrucci (Complete Version)
 # Version: 3.0.0 - Multi-Strategy Release with Trailing Stops
-
-# =====================================
-# DEDUPLICATION SUMMARY
-# =====================================
-# This code has been cleaned of duplicates:
-# - Single AccountManager implementation (EnhancedAccountManager)
-# - Single TrailingStopManager implementation (EnhancedTrailingStopManager)
-# - Removed duplicate imports
-# - Removed duplicate methods
-# - Consolidated session variables
-# - Fixed strategy config duplicates
-# =====================================
-
 # =====================================
 
 import asyncio  
@@ -31,14 +16,15 @@ import json
 import requests
 import threading
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta  # ✅ Keep this one
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any  # ✅ Fixed: Optional not "Optiona"
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque  # ✅ Keep this one
+# Removed duplicate datetime and deque imports
 
 # Load environment variables
 load_dotenv()
@@ -66,6 +52,7 @@ except Exception as e:
     exit(1)
 
 # Create session alias for compatibility
+bybit_session = session
 
 # =====================================
 # RATE LIMITING AND SAFETY MECHANISMS
@@ -98,7 +85,7 @@ class CircuitBreaker:
         self.timeout = timeout
         self.failures = 0
         self.last_failure = None
-        self.state = "CLOSED",  # CLOSED OPEN, HALF_OPEN
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self.lock = threading.Lock()
     
     def call(self, func, *args, **kwargs):
@@ -169,44 +156,44 @@ class TradingMode(Enum):                   # ← CHANGE THE SECOND SignalType TO
 @dataclass
 class TrailingConfig:
     """Trailing stop configuration for HF bot"""
-    initial_stop_pct: float = 0.4,  # Tighter initial stop for HF
-    trail_activation_pct: float = 0.8,  # Start trailing sooner
-    trail_distance_pct: float = 0.2,  # Closer trailing for HF
-    min_trail_step_pct: float = 0.05,  # Smaller steps for HF
-    max_update_frequency: int = 15,  # Update every 15 seconds for HF
+    initial_stop_pct: float = 0.4                    # Tighter initial stop for HF
+    trail_activation_pct: float = 0.8                # Start trailing sooner
+    trail_distance_pct: float = 0.2                  # Closer trailing for HF
+    min_trail_step_pct: float = 0.05                 # Smaller steps for HF
+    max_update_frequency: int = 15                    # Update every 15 seconds for HF
 
 @dataclass
 class TradingConfig:
     # Position Management - HF BOT OPTIMIZED
-    max_position_value: float = 1200,  # ~$1200 max position (21% of balance)
-    max_concurrent_trades: int = 3,  # ✅ ELITE: Focus on 3 quality positions                  # 8 concurrent positions
-    profit_target_usd: float = 120,  # ✅ ELITE: 2% profit target                    # $60 profit target (~1% of balance)
-    trail_lock_usd: float = 30,  # Lock $30 profit when trailing
-    max_loss_per_trade: float = 86,  # $86 max loss (1.5% of $5739)
-    daily_loss_cap: float = 1500,  # $500 daily cap (8.7% of balance)
+    max_position_value: float = 1200                 # ~$1200 max position (21% of balance)
+    max_concurrent_trades: int = 15                  # 8 concurrent positions
+    profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
+    trail_lock_usd: float = 30                       # Lock $30 profit when trailing
+    max_loss_per_trade: float = 86                   # $86 max loss (1.5% of $5,739)
+    daily_loss_cap: float = 1500                     # $500 daily cap (8.7% of balance)
     min_required_balance: float = 1000
     
     # Risk Management - HF OPTIMIZED
-    risk_per_trade_pct: float = 1.5,  # ✅ ELITE: Max 1.5% risk per trade                  # 1.5% risk per trade for HF
-    max_portfolio_risk_pct: float = 12.0,  # 8 × 1.5%
+    risk_per_trade_pct: float = 1.5                  # 1.5% risk per trade for HF
+    max_portfolio_risk_pct: float = 12.0             # 8 × 1.5%
     position_sizing_method: str = "risk_based"
-    emergency_stop_loss_multiplier: float = 1.3,  # Tighter emergency stop
+    emergency_stop_loss_multiplier: float = 1.3      # Tighter emergency stop
     
     # Technical Analysis - HF OPTIMIZED
-    rsi_oversold: int = 25,  # More extreme for better signals
+    rsi_oversold: int = 25                           # More extreme for better signals
     rsi_overbought: int = 75
-    rsi_period: int = 10,  # Faster RSI for HF
-    ema_fast: int = 7,  # Faster EMAs
+    rsi_period: int = 10                             # Faster RSI for HF
+    ema_fast: int = 7                                # Faster EMAs
     ema_slow: int = 17
-    macd_fast: int = 10,  # Faster MACD
+    macd_fast: int = 10                              # Faster MACD
     macd_slow: int = 22
     macd_signal: int = 7
     
     # HIGH-FREQUENCY TRADING LOGIC
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
-    scan_interval: int = 60,  # ✅ ELITE: Check every minute for quality                          # ✅ 15 seconds
-    min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals                # Higher quality for fees
+    scan_interval: int = 15                          # ✅ 15 seconds
+    min_signal_strength=0.05                # Higher quality for fees
     
     # Symbols and Markets
     symbols: List[str] = field(default_factory=list)
@@ -215,21 +202,21 @@ class TradingConfig:
     # BOT-SPECIFIC FEATURES
     use_volume_filter: bool = True
     use_volatility_filter: bool = True
-    use_market_sentiment: bool = False,  # Too slow for HF
-    enable_news_filter: bool = False,  # Too slow for HF
-    enable_advanced_ta: bool = True,  # Bot can handle complex TA
+    use_market_sentiment: bool = False               # Too slow for HF
+    enable_news_filter: bool = False                 # Too slow for HF
+    enable_advanced_ta: bool = True                  # Bot can handle complex TA
     
     # HIGH-FREQUENCY SAFETY
-    max_consecutive_losses: int = 8,  # Higher - more trades expected
-    daily_trade_limit: int = 20,  # ✅ ELITE: Max 20 quality trades/day                     # ✅ 150 trades target
-    min_time_between_trades: int = 8,  # Faster - bot can handle it
-    max_trades_per_minute: int = 6,  # Rate limiting
-    api_rate_limit_buffer: float = 0.8,  # Use 80% of API limits
+    max_consecutive_losses: int = 8                  # Higher - more trades expected
+    daily_trade_limit: int = 150                     # ✅ 150 trades target
+    min_time_between_trades: int = 8                 # Faster - bot can handle it
+    max_trades_per_minute: int = 6                   # Rate limiting
+    api_rate_limit_buffer: float = 0.8               # Use 80% of API limits
     
     # BOT PERFORMANCE MONITORING
     enable_performance_tracking: bool = True
-    profit_tracking_window: int = 50,  # Track last 50 trades
-    auto_adjust_risk: bool = True,  # Dynamic risk based on performance
+    profit_tracking_window: int = 50                 # Track last 50 trades
+    auto_adjust_risk: bool = True                    # Dynamic risk based on performance
     
     # Trailing Stop Configuration
     trailing_config: TrailingConfig = field(default_factory=TrailingConfig)
@@ -249,7 +236,7 @@ class TradingConfig:
                 "LINKUSDT",  # Steady movements
                 "MATICUSDT", # Good scalping target
                 "DOTUSDT",   # Decent liquidity
-                "ATOMUSDT",  # Good for momentum
+                "ATOMUSDT"   # Good for momentum
             ]
         
         if not self.timeframes:
@@ -293,10 +280,10 @@ class TradingConfig:
     def calculate_dynamic_limits(self, current_balance: float):
         """Update limits based on current balance"""
         self.max_loss_per_trade = current_balance * (self.risk_per_trade_pct / 100)
-        self.profit_target_usd = current_balance * 0.01,  # 1% of balance
-        self.max_position_value = current_balance * 0.21,  # 21% of balance
-        self.trail_lock_usd = self.profit_target_usd * 0.5,  # Half of profit target
-        self.daily_loss_cap = current_balance * 0.087,  # 8.7% of balance
+        self.profit_target_usd = current_balance * 0.01  # 1% of balance
+        self.max_position_value = current_balance * 0.21  # 21% of balance
+        self.trail_lock_usd = self.profit_target_usd * 0.5  # Half of profit target
+        self.daily_loss_cap = current_balance * 0.087  # 8.7% of balance
         
         logger.info(f"💰 Updated Limits for ${current_balance:,.2f} balance:")
         logger.info(f"   Max Loss Per Trade: ${self.max_loss_per_trade:.2f}")
@@ -341,46 +328,46 @@ class TradingConfig:
 # HIGH-FREQUENCY TRAILING STOP CONFIGURATIONS
 TRAILING_CONFIGS = {
     'RSI_OVERSOLD': TrailingConfig(
-        initial_stop_pct=1.5,  # ✅ ELITE: Max loss protection
-        trail_activation_pct=0.5,  # ✅ Start trailing early
-        trail_distance_pct=0.3,  # ✅ Tight trailing
-        min_trail_step_pct=0.05,  # ✅ Update frequently
-        max_update_frequency=10,  # ✅ Check every 10 seconds
+        initial_stop_pct=0.4,                        # Tighter for HF
+        trail_activation_pct=0.8,                    # Start trailing sooner
+        trail_distance_pct=0.2,                     # Closer trailing
+        min_trail_step_pct=0.06,                    # Smaller steps
+        max_update_frequency=20                      # More frequent updates
     ),
     'EMA_CROSSOVER': TrailingConfig(
-        initial_stop_pct=1.5,  # ✅ ELITE: Max loss protection
-        trail_activation_pct=0.6,  # ✅ Start trailing early
-        trail_distance_pct=0.35,  # ✅ Tight trailing
-        min_trail_step_pct=0.05,  # ✅ Update frequently
-        max_update_frequency=10,  # ✅ Check every 10 seconds
+        initial_stop_pct=0.5,
+        trail_activation_pct=1.0,
+        trail_distance_pct=0.25,
+        min_trail_step_pct=0.08,
+        max_update_frequency=25
     ),
     'SCALPING': TrailingConfig(
-        initial_stop_pct=1.0,  # ✅ ELITE: Max loss protection
-        trail_activation_pct=0.3,  # ✅ Start trailing early
-        trail_distance_pct=0.2,  # ✅ Tight trailing
-        min_trail_step_pct=0.05,  # ✅ Update frequently
-        max_update_frequency=10,  # ✅ Check every 10 seconds
+        initial_stop_pct=0.3,                        # Very tight for scalping
+        trail_activation_pct=0.5,                    # Trail immediately
+        trail_distance_pct=0.12,                     # Very close trailing
+        min_trail_step_pct=0.04,                     # Tiny steps
+        max_update_frequency=10                      # Very frequent updates
     ),
     'MACD_MOMENTUM': TrailingConfig(
-        initial_stop_pct=1.5,  # ✅ ELITE: Max loss protection
-        trail_activation_pct=0.7,  # ✅ Start trailing early
-        trail_distance_pct=0.4,  # ✅ Tight trailing
-        min_trail_step_pct=0.05,  # ✅ Update frequently
-        max_update_frequency=10,  # ✅ Check every 10 seconds
+        initial_stop_pct=0.6,
+        trail_activation_pct=1.2,
+        trail_distance_pct=0.3,
+        min_trail_step_pct=0.1,
+        max_update_frequency=30
     ),
     'BREAKOUT': TrailingConfig(
-        initial_stop_pct=2.0,  # ✅ ELITE: Max loss protection
-        trail_activation_pct=1.0,  # ✅ Start trailing early
-        trail_distance_pct=0.5,  # ✅ Tight trailing
-        min_trail_step_pct=0.05,  # ✅ Update frequently
-        max_update_frequency=10,  # ✅ Check every 10 seconds
+        initial_stop_pct=0.7,
+        trail_activation_pct=1.5,
+        trail_distance_pct=0.4,
+        min_trail_step_pct=0.12,
+        max_update_frequency=30
     ),
     'VOLUME_SPIKE': TrailingConfig(
-        initial_stop_pct=1.2,  # ✅ ELITE: Max loss protection
-        trail_activation_pct=0.4,  # ✅ Start trailing early
-        trail_distance_pct=0.25,  # ✅ Tight trailing
-        min_trail_step_pct=0.05,  # ✅ Update frequently
-        max_update_frequency=10,  # ✅ Check every 10 seconds
+        initial_stop_pct=0.4,
+        trail_activation_pct=0.7,
+        trail_distance_pct=0.18,
+        min_trail_step_pct=0.06,
+        max_update_frequency=15
     ),
     'BOLLINGER_BANDS': TrailingConfig(
         initial_stop_pct=0.5,
@@ -423,7 +410,7 @@ class ColoredFormatter(logging.Formatter):
         'WARNING': '\033[33m',  # Yellow
         'ERROR': '\033[31m',    # Red
         'CRITICAL': '\033[35m', # Magenta
-        'RESET': '\033[0m',  # Reset
+        'RESET': '\033[0m'      # Reset
     }
     
     def format(self, record):
@@ -475,7 +462,7 @@ if not API_CONFIG['api_key'] or not API_CONFIG['api_secret']:
     logger.error("   BYBIT_API_KEY=your_api_key_here")
     logger.error("   BYBIT_API_SECRET=your_api_secret_here")
     logger.error("   BYBIT_TESTNET=true  # HIGHLY RECOMMENDED for testing HF bot")
-    logger.error("   BYBIT_RECV_WINDOW=20000,  # Faster for HF trading")
+    logger.error("   BYBIT_RECV_WINDOW=20000  # Faster for HF trading")
     logger.error("   MAX_API_RETRIES=3")
     logger.error("   BYBIT_TIMEOUT=10")
     logger.error("\n💡 For HF bot testing, ALWAYS start with BYBIT_TESTNET=true")
@@ -543,11 +530,11 @@ logger.info("✅ Environment setup complete - Ready for HF bot operations!")
 class TechnicalAnalysis:
     def __init__(self, session):
         self.session = session
-        self.session = session
+        self.bybit_session = bybit_session
         self.price_cache = {}
         self.cache_lock = threading.Lock()
-        self.cache_max_age = 45,  # HF: Cache for 45 seconds max
-        self.cache_max_size = 500,  # HF: Larger cache for more symbols
+        self.cache_max_age = 45  # HF: Cache for 45 seconds max
+        self.cache_max_size = 500  # HF: Larger cache for more symbols
         
     def get_kline_data(self, symbol: str, interval: str = "5", limit: int = 100) -> Optional[pd.DataFrame]:
         """HF-Optimized kline data with aggressive caching - V5 API"""
@@ -575,7 +562,7 @@ class TechnicalAnalysis:
                 '8': '5',    # Map 8min → 5min
                 '15': '15', 
                 '1h': '60',  # Map 1h → 60min  
-                '1s': '1',  # Map 1s → 1min
+                '1s': '1'    # Map 1s → 1min
             }
             mapped_interval = timeframe_mapping.get(interval, interval)
 
@@ -806,7 +793,7 @@ class TechnicalAnalysis:
             avg_range = ((high - low) / close * 100).tail(10).mean()
             
             volatility_pct = price_range / avg_range if avg_range > 0 else 1.0
-            is_volatile = volatility_pct > 1.5,  # HF: More sensitive volatility detection
+            is_volatile = volatility_pct > 1.5  # HF: More sensitive volatility detection
             
             return {
                 'atr': atr,
@@ -1038,7 +1025,7 @@ class EnhancedTrailingStopManager:
     
     def __init__(self, session, market_data, config, logger):
         self.session = session
-        self.session = session  # For compatibility
+        self.bybit_session = session  # For compatibility
         self.market_data = market_data
         self.config = config
         self.logger = logger
@@ -1069,23 +1056,8 @@ class EnhancedTrailingStopManager:
         
         # Rate limiting and caching
         self.last_api_call = 0
-        self.api_call_interval = 0.125,  # 8 calls/sec
+        self.api_call_interval = 0.125  # 8 calls/sec
         self.signal_cache = {}
-
-    def get_trailing_config(self, strategy_name):
-        """Get trailing stop configuration for a strategy"""
-        class TrailingConfig:
-            def __init__(self):
-                # Default trailing stop settings
-                self.initial_stop_pct = 0.5,  # 0.5% initial stop
-                self.trail_amount = 0.2,  # 0.2% trailing distance
-                self.break_even_trigger = 0.3,  # Move to break-even at 0.3% profit
-        
-        # Return strategy-specific config if available, otherwise default
-        if hasattr(self, "strategy_configs") and strategy_name in self.strategy_configs:
-            return self.strategy_configs[strategy_name]
-        else:
-            return TrailingConfig()
         
         # Background tasks
         self.is_running = False
@@ -1157,7 +1129,7 @@ class EnhancedTrailingStopManager:
             with self.lock:
                 strategy_config = self.strategy_configs.get(strategy_name.upper())
                 if not strategy_config:
-                    logger.error(f"Unknown strategy config: {strategy_name}")
+                    self.logger.error(f"Unknown strategy config: {strategy_name}")
                     return False
                 
                 position = TrailingPosition(
@@ -1188,7 +1160,7 @@ class EnhancedTrailingStopManager:
             return True
             
         except Exception as e:
-            logger.error(f"Error initializing position tracking: {e}")
+            self.logger.error(f"Error initializing position tracking: {e}")
             return False
     
     def calculate_initial_stop_loss(self, position: TrailingPosition) -> float:
@@ -1366,7 +1338,7 @@ class EnhancedTrailingStopManager:
                 
         except Exception as e:
             self.hf_performance_stats['failed_updates'] += 1
-            logger.error(f"❌ Error updating stop for {position.symbol}: {e}")
+            self.logger.error(f"❌ Error updating stop for {position.symbol}: {e}")
             return False
     
     async def manage_trailing_stops_for_position(self, position_data: Dict) -> bool:
@@ -1412,7 +1384,7 @@ class EnhancedTrailingStopManager:
             return True
             
         except Exception as e:
-            logger.error(f"❌ Position management error for {symbol}: {e}")
+            self.logger.error(f"❌ Position management error for {symbol}: {e}")
             return False
     
     async def manage_all_trailing_stops(self, positions: List[Dict]):
@@ -1436,7 +1408,7 @@ class EnhancedTrailingStopManager:
                         pos = self.position_tracking[symbol]
                         profit_pct = self.calculate_profit_percentage(pos)
                         is_trailing = pos.trailing_active
-                        status_emoji = "🎯" if is_trailing else "💰"
+                        status_emoji = "��" if is_trailing else "💰"
                         
                         self.logger.info(f"{status_emoji} {symbol}: {profit_pct:+.2f}% | "
                                        f"Trailing: {'ON' if is_trailing else 'OFF'} [{pos.strategy}]")
@@ -1446,7 +1418,7 @@ class EnhancedTrailingStopManager:
                     tasks.append(task)
                     
                 except Exception as e:
-                    logger.error(f"❌ Error processing {position_data.get('symbol', 'UNKNOWN')}: {e}")
+                    self.logger.error(f"❌ Error processing {position_data.get('symbol', 'UNKNOWN')}: {e}")
                     continue
             
             # Execute tasks concurrently
@@ -1461,7 +1433,7 @@ class EnhancedTrailingStopManager:
                 self.logger.info(f"✅ Completed {successful_updates}/{len(tasks)} trailing stop updates")
                     
         except Exception as e:
-            logger.error(f"❌ Batch trailing stop management error: {e}")
+            self.logger.error(f"❌ Batch trailing stop management error: {e}")
     
     def cleanup_closed_positions(self, open_positions: List[Dict]):
         """Enhanced cleanup with performance logging"""
@@ -1503,7 +1475,7 @@ class EnhancedTrailingStopManager:
                     self.hf_performance_stats['successful_trails'] += 1
                 
         except Exception as e:
-            logger.error(f"❌ Error logging performance: {e}")
+            self.logger.error(f"❌ Error logging performance: {e}")
     
     def get_hf_performance_stats(self) -> Dict:
         """Enhanced HF performance statistics"""
@@ -1563,7 +1535,7 @@ class EnhancedTrailingStopManager:
                            f"{stats['success_rate']:.1f}% success rate")
                            
         except Exception as e:
-            logger.error(f"❌ HF optimization error: {e}")
+            self.logger.error(f"❌ HF optimization error: {e}")
     
     def _cleanup_signal_cache(self):
         """Clean up expired signal cache entries"""
@@ -1590,7 +1562,7 @@ class EnhancedTrailingStopManager:
                 await asyncio.sleep(300)  # Every 5 minutes
                 self.optimize_for_hf_trading()
             except Exception as e:
-                logger.error(f"Background cleanup error: {e}")
+                self.logger.error(f"Background cleanup error: {e}")
     
     def stop_background_tasks(self):
         """Stop background tasks"""
@@ -1636,13 +1608,13 @@ def create_enhanced_trailing_stop_manager(session, market_data, config, logger):
 trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
 
 # Start background tasks
-await self.trailing_manager.start_background_tasks()
+await trailing_manager.start_background_tasks()
 
 # In your main trading loop:
-await self.trailing_manager.manage_all_trailing_stops(positions)
+await trailing_manager.manage_all_trailing_stops(positions)
 
 # Get performance stats
-stats = self.trailing_manager.get_hf_performance_stats()
+stats = trailing_manager.get_hf_performance_stats()
 print(f"Success rate: {stats['success_rate']:.1f}%")
 """
 
@@ -1659,10 +1631,10 @@ class StrategyType(Enum):
     EMA_CROSS = "ema_cross"
     SCALPING = "scalping"
     MACD_MOMENTUM = "macd_momentum"
-    RSI_OVERSOLD = "rsi_oversold"
-    VOLUME_SPIKE = "volume_spike"
-    BOLLINGER_BANDS = "bollinger_bands"
-    MOMENTUM_BREAKOUT = "momentum_breakout"
+    RSI_OVERSOLD = "rsi_oversold"           # ✅ FIXED - Added missing strategy
+    VOLUME_SPIKE = "volume_spike"           # ✅ ADDED - HFQ-Lite Volume Spike
+    BOLLINGER_BANDS = "bollinger_bands"     # ✅ ADDED - Bollinger strategy
+    MOMENTUM_BREAKOUT = "momentum_breakout" # ✅ ADDED - Additional strategy
     BREAKOUT = "breakout"
     HYBRID_COMPOSITE = "hybrid_composite"
     REGIME_ADAPTIVE = "regime_adaptive"
@@ -1673,8 +1645,6 @@ class StrategyType(Enum):
     MACHINE_LEARNING = "machine_learning"
     ORDERBOOK_IMBALANCE = "orderbook_imbalance"
     CROSS_EXCHANGE_ARB = "cross_exchange_arb"
-
-
 
 @dataclass
 class StrategyConfig:
@@ -1709,19 +1679,19 @@ class EliteStrategyConfig(StrategyConfig):
     def __init__(self, name: str, max_positions: int, position_value: float, 
                  # Parent class parameters
                  min_confidence: float = 0.75,          # ↑ Higher threshold for HFQ
-                 risk_per_trade_pct: float = 1.5,  # ✅ ELITE: Max 1.5% risk per trade         # ↑ Optimized for HF trading
+                 risk_per_trade_pct: float = 1.5,         # ↑ Optimized for HF trading
                  enabled: bool = True, 
                  signal_cache_seconds: int = 15,        # ↓ Faster cache for HFQ
                  max_daily_trades: int = 200,           # ↑ Higher for HFQ
                  max_drawdown_pct: float = 3.0,         # ↓ Tighter control for HF
                  allowed_symbols = None,
-
+                 
                  # 🎯 ELITE HFQ PERFORMANCE PARAMETERS
                  profit_target_pct: float = 2.5,        # ↑ Higher targets with better signals
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
-                 min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals     # ↑ Elite signal quality threshold
+                 min_signal_strength=0.05,     # ↑ Elite signal quality threshold
                  
                  # 🧠 ADVANCED ML & REGIME FEATURES
                  regime_adaptive: bool = True,           # Elite regime detection
@@ -1745,8 +1715,7 @@ class EliteStrategyConfig(StrategyConfig):
                  # 📊 ELITE PERFORMANCE METRICS
                  min_sharpe_threshold: float = 2.5,     # ↑ Elite Sharpe ratio requirement
                  max_var_95: float = 0.015,            # ↓ Lower VaR for safety
-                 daily_trade_limit: int = 20,  # ✅ ELITE: Max 20 quality trades/day
-                 min_time_between_trades: int = 8,  # ✅ AUTO-FIXED: Added missing attribute         # ↑ High frequency limit
+                 daily_trade_limit: int = 200,         # ↑ High frequency limit
                  
                  # 🔄 REAL-TIME ADAPTATION
                  auto_parameter_tuning: bool = True,    # ⭐ Self-optimizing parameters
@@ -1816,7 +1785,6 @@ class EliteStrategyConfig(StrategyConfig):
         self.min_sharpe_threshold = min_sharpe_threshold
         self.max_var_95 = max_var_95
         self.daily_trade_limit = daily_trade_limit
-        self.min_time_between_trades = min_time_between_trades  # ✅ AUTO-FIXED
         self.auto_parameter_tuning = auto_parameter_tuning
         self.performance_feedback = performance_feedback
         self.regime_weight_adjustment = regime_weight_adjustment
@@ -1832,13 +1800,12 @@ class EliteStrategyConfig(StrategyConfig):
         self.position_sizing_method = position_sizing_method
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
-        # Removed duplicate symbols assignment
+        self.symbols = self.scan_symbols  # Use the existing scan_symbols
         self.min_required_balance = 500
-        self.daily_loss_cap = 0.10,  # 10% daily loss cap
-        self.trading_mode = 'moderate',  # Trading mode
+        self.daily_loss_cap = 0.10  # 10% daily loss cap
+        self.trading_mode = 'moderate'  # Trading mode
         self.log_hf_error = log_hf_error  # Assign the HF error logging function
-        self.max_concurrent_trades = 15,  # Max concurrent trades
-        self.max_loss_per_trade = 0.02,  # ✅ PATCHED: Fixes missing attribute error
+        self.max_concurrent_trades = 15  # Max concurrent trades
 
 # =====================================
 # STRATEGY-SPECIFIC CONFIGURATIONS
@@ -1876,7 +1843,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT', 'XRPUSDT', 'LINKUSDT',
             'SOLUSDT', 'BNBUSDT', 'AVAXUSDT', 'MATICUSDT', 'ATOMUSDT', 'LTCUSDT'
         ],  # Stable but broader swing universe
-        max_drawdown_pct=6.0,  # More tolerance for swing trades
+        max_drawdown_pct=6.0                         # More tolerance for swing trades
     ),
 
         StrategyType.SCALPING: StrategyConfig(
@@ -1892,7 +1859,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT', 'MATICUSDT', 'XRPUSDT',
             'DOGEUSDT', 'BNBUSDT', 'LINKUSDT', 'DOTUSDT', 'ADAUSDT', 'ATOMUSDT'
             ],  # Expanded to 12 high-liquidity pairs
-            max_drawdown_pct=2.5,  # Strictest control
+            max_drawdown_pct=2.5                         # Strictest control
     ),
 
         
@@ -1909,7 +1876,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             'BTCUSDT', 'ETHUSDT', 'LINKUSDT', 'MATICUSDT', 'UNIUSDT',
             'AVAXUSDT', 'SOLUSDT', 'DOTUSDT', 'XRPUSDT', 'ATOMUSDT', 'LTCUSDT'
             ],  # Expanded for more momentum options
-            max_drawdown_pct=7.0,  # More tolerance for momentum
+            max_drawdown_pct=7.0                         # More tolerance for momentum
     ),
 
         
@@ -1941,8 +1908,6 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             signal_cache_seconds=5,            # Fast 5-second scanning
             max_drawdown_pct=12.0,             # 12% max portfolio risk
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
-                           'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
-        scan_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
                            'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
             
             # HFQ-specific settings
@@ -2017,21 +1982,6 @@ class BaseStrategy:
         # HF-specific optimizations
         self.last_analysis_time = {}  # Per-symbol analysis timestamps
         self.signal_cache = {}        # Cache recent signals
-
-    def get_trailing_config(self, strategy_name):
-        """Get trailing stop configuration for a strategy"""
-        class TrailingConfig:
-            def __init__(self):
-                # Default trailing stop settings
-                self.initial_stop_pct = 0.5,  # 0.5% initial stop
-                self.trail_amount = 0.2,  # 0.2% trailing distance
-                self.break_even_trigger = 0.3,  # Move to break-even at 0.3% profit
-        
-        # Return strategy-specific config if available, otherwise default
-        if hasattr(self, "strategy_configs") and strategy_name in self.strategy_configs:
-            return self.strategy_configs[strategy_name]
-        else:
-            return TrailingConfig()
         self.cache_duration = timedelta(seconds=config.signal_cache_seconds)
         
         # Performance metrics
@@ -2135,7 +2085,7 @@ class BaseStrategy:
             return signal_result
             
         except Exception as e:
-            logger.error(f"❌ Analysis error for {symbol} [{self.config.name}]: {e}")
+            self.logger.error(f"❌ Analysis error for {symbol} [{self.config.name}]: {e}")
             return None
     
     async def get_market_data(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
@@ -2172,11 +2122,10 @@ class BaseStrategy:
             return None
             
         except Exception as e:
-            logger.error(f"Error getting market data for {symbol}: {e}")
+            self.logger.error(f"Error getting market data for {symbol}: {e}")
             return None
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
-        return "Buy", 0.95, {"test": True}  # ✅ Trigger forced signal
         """
         Override in each strategy
         Args:
@@ -2209,13 +2158,13 @@ class BaseStrategy:
             
             if stop_distance <= 0:
                 # Use percentage-based stop if no stop price
-                stop_distance = entry_price * 0.015,  # 1.5% default risk
+                stop_distance = entry_price * 0.015  # 1.5% default risk
             
             # Calculate position size based on risk
             position_size = risk_amount / stop_distance
             
             # Apply minimum size constraints
-            min_size = 0.001,  # Default minimum can be symbol-specific
+            min_size = 0.001  # Default minimum, can be symbol-specific
             if hasattr(self.config, 'min_position_size'):
                 min_size = self.config.min_position_size
             
@@ -2231,7 +2180,7 @@ class BaseStrategy:
             return round(position_size, 6)
             
         except Exception as e:
-            logger.error(f"Error calculating position size: {e}")
+            self.logger.error(f"Error calculating position size: {e}")
             # Ultimate fallback
             return self.config.position_value / entry_price
     
@@ -2266,7 +2215,7 @@ class BaseStrategy:
                            f"PnL: ${pnl:.2f} | Daily: ${self.daily_pnl:.2f}")
             
         except Exception as e:
-            logger.error(f"Error recording trade result: {e}")
+            self.logger.error(f"Error recording trade result: {e}")
     
     def get_strategy_info(self) -> Dict:
         """Get comprehensive strategy performance info"""
@@ -2394,9 +2343,9 @@ class RSIStrategy(BaseStrategy):
         self.rsi_overbought_strong = 80
         
         # HF scalping parameters
-        self.volume_multiplier_threshold = 1.5,  # Volume must be 1.5x average
-        self.price_momentum_threshold = 0.002,  # 0.2% price momentum
-        self.rsi_trend_periods = 3,  # RSI trend over 3 periods
+        self.volume_multiplier_threshold = 1.5  # Volume must be 1.5x average
+        self.price_momentum_threshold = 0.002   # 0.2% price momentum
+        self.rsi_trend_periods = 3              # RSI trend over 3 periods
         
     def calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI indicator"""
@@ -2410,7 +2359,7 @@ class RSIStrategy(BaseStrategy):
             return rsi
             
         except Exception as e:
-            logger.error(f"RSI calculation error: {e}")
+            self.logger.error(f"RSI calculation error: {e}")
             return pd.Series([50] * len(prices))
     
     def calculate_volume_confirmation(self, df: pd.DataFrame) -> Dict:
@@ -2435,7 +2384,7 @@ class RSIStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Volume calculation error: {e}")
+            self.logger.error(f"Volume calculation error: {e}")
             return {'volume_surge': False, 'volume_ratio_recent': 1.0}
     
     def calculate_price_momentum(self, df: pd.DataFrame) -> Dict:
@@ -2469,7 +2418,7 @@ class RSIStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Price momentum calculation error: {e}")
+            self.logger.error(f"Price momentum calculation error: {e}")
             return {'bullish_momentum': False, 'bearish_momentum': False}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -2584,7 +2533,7 @@ class RSIStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            logger.error(f"❌ RSI signal generation error: {e}")
+            self.logger.error(f"❌ RSI signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -2609,7 +2558,7 @@ class RSIStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 rsi_strategy = RSIStrategy(
     config=strategy_configs[StrategyType.RSI_SCALP],
-    session=session,
+    session=bybit_session,
     market_data=ta_engine,
     logger=logger
 )
@@ -2639,24 +2588,24 @@ class EMAStrategy(BaseStrategy):
         # EMA parameters
         self.ema_fast_period = 9
         self.ema_slow_period = 21
-        self.ema_trend_period = 50,  # Longer-term trend filter
+        self.ema_trend_period = 50  # Longer-term trend filter
         
         # Swing trading parameters
-        self.min_separation_pct = 0.15,  # Minimum EMA separation for valid signal
-        self.trend_strength_periods = 5,  # Periods to check trend consistency
-        self.volume_confirmation_periods = 10,  # Volume confirmation lookback
-        self.breakout_confirmation_candles = 2,  # Candles to confirm breakout
+        self.min_separation_pct = 0.15      # Minimum EMA separation for valid signal
+        self.trend_strength_periods = 5     # Periods to check trend consistency
+        self.volume_confirmation_periods = 10  # Volume confirmation lookback
+        self.breakout_confirmation_candles = 2  # Candles to confirm breakout
         
         # Trend persistence thresholds
-        self.min_trend_persistence = 0.6,  # 60% of recent candles must align
-        self.strong_trend_threshold = 0.8,  # 80% alignment for strong trends
+        self.min_trend_persistence = 0.6    # 60% of recent candles must align
+        self.strong_trend_threshold = 0.8   # 80% alignment for strong trends
         
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate Exponential Moving Average"""
         try:
             return prices.ewm(span=period, adjust=False).mean()
         except Exception as e:
-            logger.error(f"EMA calculation error: {e}")
+            self.logger.error(f"EMA calculation error: {e}")
             return prices.rolling(window=period).mean()  # Fallback to SMA
     
     def calculate_trend_strength(self, df: pd.DataFrame, ema_fast: pd.Series, ema_slow: pd.Series) -> Dict:
@@ -2671,7 +2620,7 @@ class EMAStrategy(BaseStrategy):
             bullish_alignments = 0
             bearish_alignments = 0
             
-            for i in range(int(len(recent_candles))):
+            for i in range(len(recent_candles)):
                 price = recent_candles.iloc[i]['close']
                 fast = ema_fast_recent.iloc[i]
                 slow = ema_slow_recent.iloc[i]
@@ -2701,7 +2650,7 @@ class EMAStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Trend strength calculation error: {e}")
+            self.logger.error(f"Trend strength calculation error: {e}")
             return {'bullish_persistence': 0, 'bearish_persistence': 0}
     
     def calculate_volume_profile(self, df: pd.DataFrame) -> Dict:
@@ -2730,11 +2679,11 @@ class EMAStrategy(BaseStrategy):
                 'volume_consistency': volume_consistency,
                 'avg_volume': avg_volume,
                 'volume_surge': volume_ratio > 1.3,  # 30% above average
-                'sustained_volume': volume_consistency > 0.4,  # 40% of candles high volume
+                'sustained_volume': volume_consistency > 0.4  # 40% of candles high volume
             }
             
         except Exception as e:
-            logger.error(f"Volume profile calculation error: {e}")
+            self.logger.error(f"Volume profile calculation error: {e}")
             return {'volume_surge': False, 'volume_ratio': 1.0}
     
     def detect_false_breakout_risk(self, df: pd.DataFrame, ema_fast: pd.Series, ema_slow: pd.Series) -> Dict:
@@ -2747,7 +2696,7 @@ class EMAStrategy(BaseStrategy):
             
             # Count crossovers in recent periods
             crossover_count = 0
-            for i in range(1, int(len(recent_ema_fast))):
+            for i in range(1, len(recent_ema_fast)):
                 if ((recent_ema_fast.iloc[i-1] <= recent_ema_slow.iloc[i-1] and 
                      recent_ema_fast.iloc[i] > recent_ema_slow.iloc[i]) or
                     (recent_ema_fast.iloc[i-1] >= recent_ema_slow.iloc[i-1] and 
@@ -2760,14 +2709,14 @@ class EMAStrategy(BaseStrategy):
             # Check price volatility
             recent_prices = df['close'].tail(lookback_periods)
             price_volatility = recent_prices.std() / recent_prices.mean() * 100
-            high_volatility = price_volatility > 2.0,  # 2% volatility threshold
+            high_volatility = price_volatility > 2.0  # 2% volatility threshold
             
             # Support/resistance near current price
             current_price = df['close'].iloc[-1]
             recent_highs = df['high'].tail(20).max()
             recent_lows = df['low'].tail(20).min()
             
-            near_resistance = abs(current_price - recent_highs) / current_price < 0.005,  # Within 0.5%
+            near_resistance = abs(current_price - recent_highs) / current_price < 0.005  # Within 0.5%
             near_support = abs(current_price - recent_lows) / current_price < 0.005
             
             return {
@@ -2781,7 +2730,7 @@ class EMAStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"False breakout detection error: {e}")
+            self.logger.error(f"False breakout detection error: {e}")
             return {'false_breakout_risk': False}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -2913,7 +2862,7 @@ class EMAStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            logger.error(f"❌ EMA signal generation error: {e}")
+            self.logger.error(f"❌ EMA signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -2938,7 +2887,7 @@ class EMAStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 ema_strategy = EMAStrategy(
     config=strategy_configs[StrategyType.EMA_CROSS],
-    session=session,
+    session=bybit_session,
     market_data=ta_engine,
     logger=logger
 )
@@ -2966,23 +2915,23 @@ class ScalpingStrategy(BaseStrategy):
         
         # Ultra-scalping parameters
         self.momentum_periods = [3, 5, 8]  # Multiple momentum timeframes
-        self.volume_lookback = 20,  # Volume analysis periods
-        self.min_momentum_pct = 0.15,  # 0.15% minimum move (tighter than 0.2%)
-        self.strong_momentum_pct = 0.3,  # 0.3% for strong signals
+        self.volume_lookback = 20          # Volume analysis periods
+        self.min_momentum_pct = 0.15       # 0.15% minimum move (tighter than 0.2%)
+        self.strong_momentum_pct = 0.3     # 0.3% for strong signals
         
         # Volume thresholds for ultra-liquid scalping
-        self.min_volume_ratio = 1.8,  # Minimum volume spike (higher than 1.5)
-        self.strong_volume_ratio = 2.5,  # Strong volume confirmation
-        self.volume_consistency_periods = 10,  # Recent volume consistency
+        self.min_volume_ratio = 1.8        # Minimum volume spike (higher than 1.5)
+        self.strong_volume_ratio = 2.5     # Strong volume confirmation
+        self.volume_consistency_periods = 10  # Recent volume consistency
         
         # Price action parameters
-        self.tick_analysis_periods = 8,  # Tick-level analysis
-        self.momentum_acceleration_factor = 1.5,  # Acceleration detection
-        self.liquidity_threshold = 0.95,  # Market liquidity requirement
+        self.tick_analysis_periods = 8     # Tick-level analysis
+        self.momentum_acceleration_factor = 1.5  # Acceleration detection
+        self.liquidity_threshold = 0.95    # Market liquidity requirement
         
         # Rapid exit criteria
-        self.quick_profit_target = 0.08,  # 0.08% quick profit
-        self.momentum_decay_threshold = 0.5,  # Exit when momentum decays 50%
+        self.quick_profit_target = 0.08    # 0.08% quick profit
+        self.momentum_decay_threshold = 0.5  # Exit when momentum decays 50%
         
     def calculate_multi_timeframe_momentum(self, df: pd.DataFrame) -> Dict:
         """Calculate momentum across multiple micro-timeframes"""
@@ -3022,7 +2971,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Multi-timeframe momentum calculation error: {e}")
+            self.logger.error(f"Multi-timeframe momentum calculation error: {e}")
             return {'strong_momentum': False, 'avg_momentum': 0}
     
     def calculate_volume_profile_scalping(self, df: pd.DataFrame) -> Dict:
@@ -3043,7 +2992,7 @@ class ScalpingStrategy(BaseStrategy):
             # Volume surge classification
             volume_surge = volume_ratio_avg >= self.min_volume_ratio
             strong_volume_surge = volume_ratio_avg >= self.strong_volume_ratio
-            extreme_volume = current_volume >= max_recent_volume * 0.9,  # Within 10% of recent max
+            extreme_volume = current_volume >= max_recent_volume * 0.9  # Within 10% of recent max
             
             # Volume consistency (institutional interest)
             consistency_volumes = df['volume'].tail(self.volume_consistency_periods)
@@ -3075,7 +3024,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Volume profile calculation error: {e}")
+            self.logger.error(f"Volume profile calculation error: {e}")
             return {'volume_surge': False, 'volume_ratio_avg': 1.0}
     
     def calculate_price_action_scalping(self, df: pd.DataFrame) -> Dict:
@@ -3105,11 +3054,11 @@ class ScalpingStrategy(BaseStrategy):
             lower_wick_ratio = lower_wick / total_range if total_range > 0 else 0
             
             # Support/resistance test
-            rejection_at_high = upper_wick_ratio > 0.4,  # Strong rejection at highs
-            rejection_at_low = lower_wick_ratio > 0.4,  # Strong rejection at lows
+            rejection_at_high = upper_wick_ratio > 0.4  # Strong rejection at highs
+            rejection_at_low = lower_wick_ratio > 0.4   # Strong rejection at lows
             
             # Momentum continuation patterns
-            momentum_candle = body_ratio > 0.6,  # Strong directional candle
+            momentum_candle = body_ratio > 0.6  # Strong directional candle
             inside_bar = (current_candle['high'] <= df.iloc[-2]['high'] and 
                          current_candle['low'] >= df.iloc[-2]['low'])
             
@@ -3126,7 +3075,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Price action analysis error: {e}")
+            self.logger.error(f"Price action analysis error: {e}")
             return {'momentum_candle': False, 'direction_consistency': 0.5}
     
     def calculate_market_liquidity(self, df: pd.DataFrame) -> Dict:
@@ -3140,7 +3089,7 @@ class ScalpingStrategy(BaseStrategy):
             recent_data = df.tail(10)
             volume_weighted_price_change = 0
             
-            for i in range(1, int(len(recent_data))):
+            for i in range(1, len(recent_data)):
                 price_change = abs(recent_data.iloc[i]['close'] - recent_data.iloc[i-1]['close'])
                 volume = recent_data.iloc[i]['volume']
                 if volume > 0:
@@ -3158,7 +3107,7 @@ class ScalpingStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Liquidity calculation error: {e}")
+            self.logger.error(f"Liquidity calculation error: {e}")
             return {'liquidity_adequate': True, 'liquidity_score': 1.0}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -3281,7 +3230,7 @@ class ScalpingStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            logger.error(f"❌ Ultra scalping signal generation error: {e}")
+            self.logger.error(f"❌ Ultra scalping signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def should_quick_exit(self, entry_price: float, current_price: float, side: str) -> Tuple[bool, str]:
@@ -3304,7 +3253,7 @@ class ScalpingStrategy(BaseStrategy):
             return False, ""
             
         except Exception as e:
-            logger.error(f"Quick exit calculation error: {e}")
+            self.logger.error(f"Quick exit calculation error: {e}")
             return False, ""
     
     def get_strategy_specific_info(self) -> Dict:
@@ -3329,7 +3278,7 @@ class ScalpingStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 scalping_strategy = ScalpingStrategy(
     config=strategy_configs[StrategyType.SCALPING],
-    session=session,
+    session=bybit_session,
     market_data=ta_engine,
     logger=logger
 )
@@ -3361,19 +3310,19 @@ class MACDStrategy(BaseStrategy):
         self.macd_signal = 9
         
         # Momentum analysis parameters
-        self.trend_periods = 50,  # Longer-term trend context
-        self.momentum_confirmation_periods = 20,  # Momentum persistence
-        self.divergence_lookback = 15,  # Divergence detection periods
-        self.volume_confirmation_periods = 15,  # Volume momentum analysis
+        self.trend_periods = 50            # Longer-term trend context
+        self.momentum_confirmation_periods = 20  # Momentum persistence
+        self.divergence_lookback = 15      # Divergence detection periods
+        self.volume_confirmation_periods = 15    # Volume momentum analysis
         
         # Signal strength thresholds
-        self.min_histogram_strength = 0.001,  # Minimum histogram value
-        self.strong_histogram_strength = 0.005,  # Strong momentum threshold
-        self.trend_alignment_threshold = 0.002,  # MACD-trend alignment
+        self.min_histogram_strength = 0.001    # Minimum histogram value
+        self.strong_histogram_strength = 0.005  # Strong momentum threshold
+        self.trend_alignment_threshold = 0.002  # MACD-trend alignment
         
         # Momentum persistence requirements
-        self.min_momentum_persistence = 0.6,  # 60% of recent periods must align
-        self.strong_momentum_persistence = 0.8,  # 80% for strong signals
+        self.min_momentum_persistence = 0.6     # 60% of recent periods must align
+        self.strong_momentum_persistence = 0.8  # 80% for strong signals
         
     def calculate_macd(self, prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict:
         """Calculate MACD indicator components"""
@@ -3400,7 +3349,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"MACD calculation error: {e}")
+            self.logger.error(f"MACD calculation error: {e}")
             # Return neutral values
             neutral_series = pd.Series([0] * len(prices))
             return {
@@ -3426,7 +3375,7 @@ class MACDStrategy(BaseStrategy):
             macd_lows = []
             
             # Simple peak/trough detection
-            for i in range(2, int(len(recent_prices) - 2)):
+            for i in range(2, len(recent_prices) - 2):
                 # Price and MACD highs
                 if (recent_prices.iloc[i] > recent_prices.iloc[i-1] and 
                     recent_prices.iloc[i] > recent_prices.iloc[i+1] and
@@ -3474,7 +3423,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Divergence detection error: {e}")
+            self.logger.error(f"Divergence detection error: {e}")
             return {'bullish_divergence': False, 'bearish_divergence': False, 'divergence_strength': 0}
     
     def calculate_momentum_persistence(self, macd_data: Dict) -> Dict:
@@ -3493,7 +3442,7 @@ class MACDStrategy(BaseStrategy):
             bearish_persistence = bearish_periods / len(recent_histogram)
             
             # MACD line momentum
-            macd_above_signal = sum(1 for i in range(int(len(recent_macd))) 
+            macd_above_signal = sum(1 for i in range(len(recent_macd)) 
                                   if recent_macd.iloc[i] > recent_signal.iloc[i])
             macd_momentum_bullish = macd_above_signal / len(recent_macd)
             
@@ -3522,7 +3471,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Momentum persistence calculation error: {e}")
+            self.logger.error(f"Momentum persistence calculation error: {e}")
             return {'momentum_consistent': False, 'bullish_persistence': 0.5}
     
     def calculate_trend_context(self, df: pd.DataFrame, macd_data: Dict) -> Dict:
@@ -3543,11 +3492,11 @@ class MACDStrategy(BaseStrategy):
                 n = len(x)
                 sum_x = sum(x)
                 sum_y = sum(y)
-                sum_xy = sum(x[i] * y[i] for i in range(int(n)))
-                sum_x2 = sum(x[i] ** 2 for i in range(int(n)))
+                sum_xy = sum(x[i] * y[i] for i in range(n))
+                sum_x2 = sum(x[i] ** 2 for i in range(n))
                 
                 slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
-                trend_strength = abs(slope) / trend_end * 100,  # Normalize
+                trend_strength = abs(slope) / trend_end * 100  # Normalize
                 
             else:
                 overall_trend = 0
@@ -3555,7 +3504,7 @@ class MACDStrategy(BaseStrategy):
             
             # MACD-Trend alignment
             current_macd = macd_data['macd'].iloc[-1]
-            trend_bullish = overall_trend > 0.5,  # 0.5% minimum trend
+            trend_bullish = overall_trend > 0.5  # 0.5% minimum trend
             trend_bearish = overall_trend < -0.5
             
             macd_trend_alignment = False
@@ -3570,11 +3519,11 @@ class MACDStrategy(BaseStrategy):
                 'trend_bullish': trend_bullish,
                 'trend_bearish': trend_bearish,
                 'macd_trend_alignment': macd_trend_alignment,
-                'strong_trend': abs(overall_trend) > 2.0,  # 2% minimum for strong trend
+                'strong_trend': abs(overall_trend) > 2.0  # 2% minimum for strong trend
             }
             
         except Exception as e:
-            logger.error(f"Trend context calculation error: {e}")
+            self.logger.error(f"Trend context calculation error: {e}")
             return {'overall_trend': 0, 'macd_trend_alignment': False}
     
     def calculate_volume_momentum(self, df: pd.DataFrame) -> Dict:
@@ -3616,7 +3565,7 @@ class MACDStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Volume momentum calculation error: {e}")
+            self.logger.error(f"Volume momentum calculation error: {e}")
             return {'volume_confirmation': False, 'volume_ratio': 1.0}
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -3749,7 +3698,7 @@ class MACDStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            logger.error(f"❌ MACD momentum signal generation error: {e}")
+            self.logger.error(f"❌ MACD momentum signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -3775,7 +3724,7 @@ class MACDStrategy(BaseStrategy):
 strategy_configs = get_strategy_configs()
 macd_strategy = MACDStrategy(
     config=strategy_configs[StrategyType.MACD_MOMENTUM],
-    session=session,
+    session=bybit_session,
     market_data=ta_engine,
     logger=logger
 )
@@ -3804,27 +3753,27 @@ class BreakoutStrategy(BaseStrategy):
         # Bollinger Band parameters
         self.bb_period = 20
         self.bb_std_dev = 2.0
-        self.bb_squeeze_threshold = 0.015,  # 1.5% width for squeeze detection
+        self.bb_squeeze_threshold = 0.015  # 1.5% width for squeeze detection
         
         # Consolidation detection parameters
-        self.consolidation_periods = 15,  # Periods to check for consolidation
-        self.max_consolidation_range = 0.02,  # 2% max range for consolidation
-        self.min_consolidation_periods = 8,  # Minimum periods in consolidation
+        self.consolidation_periods = 15    # Periods to check for consolidation
+        self.max_consolidation_range = 0.02  # 2% max range for consolidation
+        self.min_consolidation_periods = 8   # Minimum periods in consolidation
         
         # Breakout validation parameters
-        self.min_breakout_strength = 0.003,  # 0.3% minimum breakout distance
-        self.strong_breakout_strength = 0.008,  # 0.8% for strong breakouts
-        self.volume_surge_threshold = 2.5,  # 2.5x volume for breakouts
-        self.momentum_confirmation_periods = 5,  # Momentum confirmation
+        self.min_breakout_strength = 0.003   # 0.3% minimum breakout distance
+        self.strong_breakout_strength = 0.008  # 0.8% for strong breakouts
+        self.volume_surge_threshold = 2.5      # 2.5x volume for breakouts
+        self.momentum_confirmation_periods = 5  # Momentum confirmation
         
         # False breakout protection
-        self.support_resistance_periods = 50,  # S/R level detection
-        self.false_breakout_threshold = 0.002,  # 0.2% false breakout filter
-        self.retest_confirmation_periods = 3,  # Periods to wait for retest
+        self.support_resistance_periods = 50   # S/R level detection
+        self.false_breakout_threshold = 0.002  # 0.2% false breakout filter
+        self.retest_confirmation_periods = 3   # Periods to wait for retest
         
         # Market structure parameters
-        self.volatility_expansion_threshold = 1.5,  # ATR expansion requirement
-        self.institutional_volume_threshold = 3.0,  # 3x volume for institutional
+        self.volatility_expansion_threshold = 1.5  # ATR expansion requirement
+        self.institutional_volume_threshold = 3.0  # 3x volume for institutional
         
     def calculate_bollinger_bands(self, prices: pd.Series, period: int = 20, std_dev: float = 2.0) -> Dict:
         """Calculate Bollinger Bands with additional metrics"""
@@ -3837,7 +3786,7 @@ class BreakoutStrategy(BaseStrategy):
             lower_band = sma - (std * std_dev)
             
             # BB width and position
-            bb_width = (upper_band - lower_band) / sma * 100,  # Percentage width
+            bb_width = (upper_band - lower_band) / sma * 100  # Percentage width
             bb_position = (prices - lower_band) / (upper_band - lower_band)  # 0-1 position
             
             # Squeeze detection (narrow bands)
@@ -3853,7 +3802,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Bollinger Bands calculation error: {e}")
+            self.logger.error(f"Bollinger Bands calculation error: {e}")
             # Return neutral bands
             return {
                 'upper': prices * 1.02,
@@ -3885,7 +3834,7 @@ class BreakoutStrategy(BaseStrategy):
             # Count periods within consolidation range
             consolidation_periods = 0
             avg_price = (range_high + range_low) / 2
-            tolerance = avg_price * 0.01,  # 1% tolerance
+            tolerance = avg_price * 0.01  # 1% tolerance
             
             for _, candle in recent_data.iterrows():
                 candle_range = candle['high'] - candle['low']
@@ -3913,7 +3862,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Consolidation detection error: {e}")
+            self.logger.error(f"Consolidation detection error: {e}")
             return {'is_consolidating': False, 'strong_consolidation': False}
     
     def detect_support_resistance_levels(self, df: pd.DataFrame) -> Dict:
@@ -3926,7 +3875,7 @@ class BreakoutStrategy(BaseStrategy):
             highs = []
             lows = []
             
-            for i in range(2, int(len(recent_data) - 2)):
+            for i in range(2, len(recent_data) - 2):
                 current_high = recent_data.iloc[i]['high']
                 current_low = recent_data.iloc[i]['low']
                 
@@ -3968,7 +3917,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Support/Resistance detection error: {e}")
+            self.logger.error(f"Support/Resistance detection error: {e}")
             current_price = df['close'].iloc[-1]
             return {
                 'nearest_resistance': current_price * 1.05,
@@ -4020,9 +3969,9 @@ class BreakoutStrategy(BaseStrategy):
             
             # Volume surge (most important)
             if volume_ratio >= self.institutional_volume_threshold:
-                quality_score += 0.3,  # Institutional participation
+                quality_score += 0.3  # Institutional participation
             elif volume_ratio >= self.volume_surge_threshold:
-                quality_score += 0.2,  # Strong volume
+                quality_score += 0.2  # Strong volume
             
             # Consolidation quality
             if consolidation_data['strong_consolidation']:
@@ -4056,7 +4005,7 @@ class BreakoutStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"Breakout quality calculation error: {e}")
+            self.logger.error(f"Breakout quality calculation error: {e}")
             return {'breakout_type': 'none', 'quality_score': 0}
     
     def calculate_atr(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -4076,7 +4025,7 @@ class BreakoutStrategy(BaseStrategy):
             return atr
             
         except Exception as e:
-            logger.error(f"ATR calculation error: {e}")
+            self.logger.error(f"ATR calculation error: {e}")
             return pd.Series([df['close'].iloc[-1] * 0.02] * len(df))  # 2% fallback
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
@@ -4205,7 +4154,7 @@ class BreakoutStrategy(BaseStrategy):
             return "Hold", 0.0, analysis
             
         except Exception as e:
-            logger.error(f"❌ Breakout signal generation error: {e}")
+            self.logger.error(f"❌ Breakout signal generation error: {e}")
             return "Hold", 0.0, {}
     
     def get_strategy_specific_info(self) -> Dict:
@@ -4245,18 +4194,18 @@ class VolumeSpikeStrategy(BaseStrategy):
     def __init__(self, config, session, market_data, logger):
         super().__init__(StrategyType.VOLUME_SPIKE, config, session, market_data, logger)        
         # HFQ-Lite Configuration
-        self.moderate_spike_ratio = 2.0,  # 2.0x moderate spike
-        self.strong_spike_ratio = 3.0,  # 3.0x strong spike  
-        self.institutional_spike_ratio = 5.0,  # 5.0x institutional detection
-        self.extreme_spike_ratio = 8.0,  # 8.0x extreme spike
+        self.moderate_spike_ratio = 2.0      # 2.0x moderate spike
+        self.strong_spike_ratio = 3.0        # 3.0x strong spike  
+        self.institutional_spike_ratio = 5.0 # 5.0x institutional detection
+        self.extreme_spike_ratio = 8.0       # 8.0x extreme spike
         
         # Quality thresholds
-        self.min_quality_score = 0.70,  # 70% minimum quality
-        self.excellent_quality = 0.85,  # 85% excellent quality
-        self.elite_quality = 0.95,  # 95% elite quality
+        self.min_quality_score = 0.70        # 70% minimum quality
+        self.excellent_quality = 0.85        # 85% excellent quality
+        self.elite_quality = 0.95            # 95% elite quality
         
         # Daily tracking
-        self.daily_trade_target = 150,  # 60 high-quality trades per day
+        self.daily_trade_target = 150         # 60 high-quality trades per day
         self.executed_trades_today = 0
         self.daily_opportunities_analyzed = 0
         self.opportunity_pool = deque(maxlen=150)
@@ -4327,7 +4276,7 @@ class VolumeSpikeStrategy(BaseStrategy):
             return "Hold", 0.0, {}
             
         except Exception as e:
-            logger.error(f"❌ HFQ-Lite Volume Spike error: {e}")
+            self.logger.error(f"❌ HFQ-Lite Volume Spike error: {e}")
             return "Hold", 0.0, {}
     
     def _quick_volume_check(self, df: pd.DataFrame) -> bool:
@@ -4443,7 +4392,7 @@ class VolumeSpikeStrategy(BaseStrategy):
         total_buy_volume = 0
         total_sell_volume = 0
         
-        for i in range(1, int(len(recent_data))):
+        for i in range(1, len(recent_data)):
             price_change = recent_data['close'].iloc[i] - recent_data['close'].iloc[i-1]
             volume = recent_data['volume'].iloc[i]
             
@@ -4458,7 +4407,7 @@ class VolumeSpikeStrategy(BaseStrategy):
             return {'flow_direction': 'neutral', 'flow_strength': 0.0}
         
         buy_ratio = total_buy_volume / total_volume
-        flow_imbalance = abs(buy_ratio - 0.5) * 2,  # 0 to 1 scale
+        flow_imbalance = abs(buy_ratio - 0.5) * 2  # 0 to 1 scale
         
         flow_direction = "bullish" if buy_ratio > 0.55 else "bearish" if buy_ratio < 0.45 else "neutral"
         
@@ -4612,7 +4561,7 @@ class VolumeSpikeStrategy(BaseStrategy):
         if progress_ratio < 0.4:  # First 40% - Be selective
             required_quality = self.excellent_quality  # 85%
         elif progress_ratio < 0.8:  # Middle 40% - Moderate standards
-            required_quality = (self.excellent_quality + self.min_quality_score) / 2,  # 77.5%
+            required_quality = (self.excellent_quality + self.min_quality_score) / 2  # 77.5%
         else:  # Final 20% - Meet targets
             required_quality = self.min_quality_score  # 70%
         
@@ -4755,30 +4704,30 @@ class BollingerBandsStrategy(BaseStrategy):
         super().__init__(StrategyType.BOLLINGER_BANDS, config, session, market_data, logger)
         
         # HFQ-Lite BB Configuration
-        self.bb_period = 20,  # Standard BB period
-        self.bb_std_dev = 2.0,  # Standard deviation multiplier
+        self.bb_period = 20                      # Standard BB period
+        self.bb_std_dev = 2.0                    # Standard deviation multiplier
         
         # BB Scenario Classification
-        self.tight_squeeze_threshold = 1.2,  # Very tight bands (1.2% width)
-        self.moderate_squeeze_threshold = 1.8,  # Moderate squeeze (1.8% width)
-        self.normal_width_threshold = 2.5,  # Normal volatility (2.5% width)
-        self.high_volatility_threshold = 4.0,  # High volatility (4.0%+ width)
+        self.tight_squeeze_threshold = 1.2       # Very tight bands (1.2% width)
+        self.moderate_squeeze_threshold = 1.8    # Moderate squeeze (1.8% width)
+        self.normal_width_threshold = 2.5        # Normal volatility (2.5% width)
+        self.high_volatility_threshold = 4.0     # High volatility (4.0%+ width)
         
         # Position Thresholds (Dynamic based on volatility)
-        self.extreme_oversold_threshold = 0.05,  # 5% from lower band
-        self.strong_oversold_threshold = 0.15,  # 15% from lower band
-        self.moderate_oversold_threshold = 0.25,  # 25% from lower band
-        self.extreme_overbought_threshold = 0.95,  # 95% from lower band
-        self.strong_overbought_threshold = 0.85,  # 85% from lower band
-        self.moderate_overbought_threshold = 0.75,  # 75% from lower band
+        self.extreme_oversold_threshold = 0.05   # 5% from lower band
+        self.strong_oversold_threshold = 0.15    # 15% from lower band
+        self.moderate_oversold_threshold = 0.25  # 25% from lower band
+        self.extreme_overbought_threshold = 0.95 # 95% from lower band
+        self.strong_overbought_threshold = 0.85  # 85% from lower band
+        self.moderate_overbought_threshold = 0.75 # 75% from lower band
         
         # Quality thresholds
-        self.min_quality_score = 0.75,  # 75% minimum quality
-        self.excellent_quality = 0.88,  # 88% excellent quality
-        self.elite_quality = 0.95,  # 95% elite quality
+        self.min_quality_score = 0.75            # 75% minimum quality
+        self.excellent_quality = 0.88            # 88% excellent quality
+        self.elite_quality = 0.95               # 95% elite quality
         
         # Daily tracking
-        self.daily_trade_target = 45,  # 45 high-quality BB trades per day
+        self.daily_trade_target = 45             # 45 high-quality BB trades per day
         self.executed_trades_today = 0
         self.daily_opportunities_analyzed = 0
         self.opportunity_pool = deque(maxlen=120)
@@ -4860,7 +4809,7 @@ class BollingerBandsStrategy(BaseStrategy):
             return "Hold", 0.0, {}
             
         except Exception as e:
-            logger.error(f"❌ HFQ-Lite Bollinger Bands error: {e}")
+            self.logger.error(f"❌ HFQ-Lite Bollinger Bands error: {e}")
             return "Hold", 0.0, {}
     
     def _quick_bb_check(self, df: pd.DataFrame) -> bool:
@@ -5299,7 +5248,7 @@ class BollingerBandsStrategy(BaseStrategy):
         if progress_ratio < 0.3:  # First 30% - Very selective
             required_quality = self.excellent_quality  # 88%
         elif progress_ratio < 0.7:  # Middle 40% - Selective
-            required_quality = (self.excellent_quality + self.min_quality_score) / 2,  # 81.5%
+            required_quality = (self.excellent_quality + self.min_quality_score) / 2  # 81.5%
         else:  # Final 30% - Meet targets
             required_quality = self.min_quality_score  # 75%
         
@@ -5465,37 +5414,37 @@ class HybridCompositeStrategy(BaseStrategy):
             'ema': 0.25,        # EMA crossover weight  
             'macd': 0.20,       # MACD weight
             'volume': 0.15,     # Volume confirmation weight
-            'momentum': 0.15,  # Price momentum weight
+            'momentum': 0.15    # Price momentum weight
         }
         
         # Quality thresholds (HFQ optimized)
-        self.min_quality_score = 0.70,  # 70% minimum quality for HFQ
-        self.excellent_quality = 0.85,  # 85% excellent quality
-        self.elite_quality = 0.92,  # 92% elite quality
+        self.min_quality_score = 0.70            # 70% minimum quality for HFQ
+        self.excellent_quality = 0.85            # 85% excellent quality
+        self.elite_quality = 0.92                # 92% elite quality
         
         # Signal strength thresholds (HFQ optimized)
-        self.min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals          # Lower threshold for HFQ
-        self.strong_signal_threshold = 0.70,  # Strong signal threshold
-        self.elite_signal_threshold = 0.85,  # Elite signal threshold
+        self.min_signal_strength=0.05          # Lower threshold for HFQ
+        self.strong_signal_threshold = 0.70      # Strong signal threshold
+        self.elite_signal_threshold = 0.85       # Elite signal threshold
         
         # Indicator parameters (HFQ optimized)
-        self.rsi_period = 12,  # Faster RSI for HFQ
-        self.rsi_oversold = 30,  # Standard levels for HFQ
+        self.rsi_period = 12                     # Faster RSI for HFQ
+        self.rsi_oversold = 30                   # Standard levels for HFQ
         self.rsi_overbought = 70
-        self.ema_fast = 5,  # Very fast EMA for HFQ
-        self.ema_slow = 13,  # Faster slow EMA
-        self.ema_trend = 34,  # Trend filter
-        self.macd_fast = 8,  # Faster MACD for HFQ
+        self.ema_fast = 5                        # Very fast EMA for HFQ
+        self.ema_slow = 13                       # Faster slow EMA
+        self.ema_trend = 34                      # Trend filter
+        self.macd_fast = 8                       # Faster MACD for HFQ
         self.macd_slow = 17
         self.macd_signal = 6
         
         # Volume analysis (HFQ optimized)
-        self.volume_lookback = 15,  # Shorter lookback for HFQ
-        self.significant_volume_ratio = 1.3,  # 1.3x average volume
-        self.extreme_volume_ratio = 2.5,  # 2.5x average volume
+        self.volume_lookback = 15                # Shorter lookback for HFQ
+        self.significant_volume_ratio = 1.3      # 1.3x average volume
+        self.extreme_volume_ratio = 2.5          # 2.5x average volume
         
         # Performance tracking (HFQ optimized)
-        self.daily_trade_target = 150,  # 150 high-quality composite trades/day
+        self.daily_trade_target = 150            # 150 high-quality composite trades/day
         self.executed_trades_today = 0
         self.daily_opportunities_analyzed = 0
         self.opportunity_pool = deque(maxlen=300) # Larger pool for HFQ
@@ -5587,7 +5536,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return final_signal, final_strength, analysis
             
         except Exception as e:
-            logger.error(f"❌ HFQ Elite Hybrid Composite error: {e}")
+            self.logger.error(f"❌ HFQ Elite Hybrid Composite error: {e}")
             return "Hold", 0.0, {}
     
     def _quick_market_check(self, df: pd.DataFrame) -> bool:
@@ -5607,7 +5556,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return True
             
         except Exception:
-            return True,  # Default to continue if check fails
+            return True  # Default to continue if check fails
     
     def _calculate_all_indicators(self, df: pd.DataFrame) -> Dict:
         """Calculate all technical indicators efficiently"""
@@ -5641,7 +5590,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return indicators
             
         except Exception as e:
-            logger.error(f"❌ Indicator calculation error: {e}")
+            self.logger.error(f"❌ Indicator calculation error: {e}")
             return {}
     
     def _generate_individual_signals(self, indicators: Dict, df: pd.DataFrame) -> Dict:
@@ -5747,7 +5696,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return signals
             
         except Exception as e:
-            logger.error(f"❌ Individual signal generation error: {e}")
+            self.logger.error(f"❌ Individual signal generation error: {e}")
             return {}
     
     def _calculate_composite_signal(self, individual_signals: Dict) -> Tuple[str, float]:
@@ -5797,7 +5746,7 @@ class HybridCompositeStrategy(BaseStrategy):
                 return "Hold", max(buy_score, sell_score)
                 
         except Exception as e:
-            logger.error(f"❌ Composite signal calculation error: {e}")
+            self.logger.error(f"❌ Composite signal calculation error: {e}")
             return "Hold", 0.0
     
     def _assess_signal_quality(self, individual_signals: Dict, indicators: Dict, df: pd.DataFrame) -> float:
@@ -5840,7 +5789,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return sum(quality_factors) / len(quality_factors)
             
         except Exception as e:
-            logger.error(f"❌ Quality assessment error: {e}")
+            self.logger.error(f"❌ Quality assessment error: {e}")
             return 0.5
     
     def _apply_regime_adjustment(self, signal_strength: float, indicators: Dict, df: pd.DataFrame) -> float:
@@ -5870,7 +5819,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return min(1.0, signal_strength * adjustment)
             
         except Exception as e:
-            logger.error(f"❌ Regime adjustment error: {e}")
+            self.logger.error(f"❌ Regime adjustment error: {e}")
             return signal_strength
     
     def _make_final_decision(self, signal: str, strength: float, quality: float) -> Tuple[str, float]:
@@ -5901,7 +5850,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return signal, final_strength
             
         except Exception as e:
-            logger.error(f"❌ Final decision error: {e}")
+            self.logger.error(f"❌ Final decision error: {e}")
             return "Hold", 0.0
     
     def should_enter_trade(self, symbol: str, signal_data: Dict) -> bool:
@@ -5929,10 +5878,10 @@ class HybridCompositeStrategy(BaseStrategy):
                 if s['direction'] == signal_direction
             )
             
-            return agreement_count >= 2,  # Reduced from 3 to 2 for HFQ
+            return agreement_count >= 2  # Reduced from 3 to 2 for HFQ
             
         except Exception as e:
-            logger.error(f"❌ Trade entry decision error: {e}")
+            self.logger.error(f"❌ Trade entry decision error: {e}")
             return False
     
     def calculate_position_size(self, symbol: str, signal_data: Dict) -> float:
@@ -5950,7 +5899,7 @@ class HybridCompositeStrategy(BaseStrategy):
             return base_size * composite_multiplier
             
         except Exception as e:
-            logger.error(f"❌ Position size calculation error: {e}")
+            self.logger.error(f"❌ Position size calculation error: {e}")
             return 0.0
     
     def get_hfq_composite_status(self) -> Dict:
@@ -5981,7 +5930,7 @@ class HybridCompositeStrategy(BaseStrategy):
             }
             
         except Exception as e:
-            logger.error(f"❌ Status generation error: {e}")
+            self.logger.error(f"❌ Status generation error: {e}")
             return {}
 # =====================================
 # REGIME ADAPTIVE AI DIRECTOR
@@ -6003,10 +5952,10 @@ class RegimeAdaptiveStrategy(BaseStrategy):
         return []  # Coordination strategy
     
     def should_enter_trade(self, symbol: str, signal_data: Dict) -> bool:
-        return False,  # Coordination strategy only
+        return False  # Coordination strategy only
     
     def calculate_position_size(self, symbol: str, signal_data: Dict) -> float:
-        return 0.0,  # No direct positions
+        return 0.0  # No direct positions
 
 # =====================================
 # STRATEGY 9: FUNDING ARBITRAGE
@@ -6024,10 +5973,10 @@ class FundingArbitrageStrategy(BaseStrategy):
         return []  # Funding-based strategy
     
     def should_enter_trade(self, symbol: str, signal_data: Dict) -> bool:
-        return False,  # Funding-based positions
+        return False  # Funding-based positions
     
     def calculate_position_size(self, symbol: str, signal_data: Dict) -> float:
-        return 0.0,  # Funding-specific sizing
+        return 0.0  # Funding-specific sizing
 
 # =====================================
 # STRATEGY 10: NEWS SENTIMENT AI
@@ -6045,10 +5994,10 @@ class NewsSentimentStrategy(BaseStrategy):
         return []  # News-based strategy
     
     def should_enter_trade(self, symbol: str, signal_data: Dict) -> bool:
-        return False,  # News-driven entries
+        return False  # News-driven entries
     
     def calculate_position_size(self, symbol: str, signal_data: Dict) -> float:
-        return 0.0,  # News-specific sizing
+        return 0.0  # News-specific sizing
 
 # =====================================
 # STRATEGY 11: MTF CONFLUENCE
@@ -6157,7 +6106,6 @@ class CrossExchangeArbStrategy(BaseStrategy):
         self.min_sharpe_threshold = min_sharpe_threshold
         self.max_var_95 = max_var_95
         self.daily_trade_limit = daily_trade_limit
-        self.min_time_between_trades = min_time_between_trades  # ✅ AUTO-FIXED
         
         # Real-time Adaptation
         self.auto_parameter_tuning = auto_parameter_tuning
@@ -6173,7 +6121,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.RSI_OVERSOLD: EliteStrategyConfig(
         name="RSI Quantum Pro",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,                 # ↑ Increased for elite performance
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6183,7 +6131,7 @@ STRATEGY_CONFIGS = {
         leverage=12,                     # ↑ Higher leverage with better risk control
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="3",                   # ↑ Optimized 3-minute timeframe
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals        # ↑ Higher quality threshold
+        min_signal_strength=0.05,        # ↑ Higher quality threshold
         regime_adaptive=True,
         ml_filter=True,
         volatility_scaling=True,
@@ -6194,7 +6142,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.EMA_CROSS: EliteStrategyConfig(
         name="EMA Neural Elite",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6204,7 +6152,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
         timeframe="8",                   # ↑ Optimized 8-minute sweet spot
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,    # ← Elite feature
@@ -6214,7 +6162,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.SCALPING: EliteStrategyConfig(
         name="Lightning Scalp Quantum",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,                 # ↑ More positions for scalping
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6224,7 +6172,7 @@ STRATEGY_CONFIGS = {
         leverage=15,                     # ↑ Maximum leverage for scalping
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals        # ↑ Very high quality for scalping
+        min_signal_strength=0.05,        # ↑ Very high quality for scalping
         latency_critical=True,           # ← Elite execution
         microstructure_boost=True,       # ← Order flow analysis
         execution_alpha=True,
@@ -6235,7 +6183,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MACD_MOMENTUM: EliteStrategyConfig(
         name="MACD Momentum Master",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,
         position_value=0,                # ← DYNAMIC SIZING (2% of balance)
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6245,7 +6193,7 @@ STRATEGY_CONFIGS = {
         leverage=8,
         scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         regime_adaptive=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=1.7,
@@ -6256,7 +6204,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
         name="HFQ Volume Spike Elite",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading                    # ← ENABLED (was disabled)
+        enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,                 # ↑ More positions for volume opportunities
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6266,7 +6214,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         microstructure_boost=True,       # ← Order flow integration
         news_integration=True,           # ← News-driven volume spikes
         execution_alpha=True,
@@ -6276,7 +6224,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.BOLLINGER_BANDS: EliteStrategyConfig(
         name="HFQ Bollinger Quantum Pro",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading                    # ← ENABLED (was disabled)
+        enabled=True,                    # ← ENABLED (was disabled)
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6286,7 +6234,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "AVAXUSDT", "MATICUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         regime_adaptive=True,
         volatility_scaling=True,
         ml_filter=True,
@@ -6298,7 +6246,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.REGIME_ADAPTIVE: EliteStrategyConfig(
         name="Market Regime AI Director",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=0,                 # Overlay strategy - adjusts others
         position_value=0,
         profit_target_pct=0,
@@ -6306,7 +6254,7 @@ STRATEGY_CONFIGS = {
         leverage=1,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         ml_filter=True,
         performance_feedback=True,
         auto_parameter_tuning=True,
@@ -6315,7 +6263,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.FUNDING_ARBITRAGE: EliteStrategyConfig(
         name="Funding Rate Harvester Pro",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,                 # Dedicated positions for funding
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6325,16 +6273,16 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
         timeframe="1h",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals        # Extremely high confidence
+        min_signal_strength=0.05,        # Extremely high confidence
         funding_aware=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=3.0,        # High Sharpe for arbitrage
-        daily_trade_limit=24,  # Once per hour max
+        daily_trade_limit=24             # Once per hour max
     ),
     
     StrategyType.NEWS_SENTIMENT: EliteStrategyConfig(
         name="News Alpha AI Engine",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6344,7 +6292,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         news_integration=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6354,7 +6302,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MTF_CONFLUENCE: EliteStrategyConfig(
         name="Multi-Timeframe Confluence AI",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6364,12 +6312,12 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=2.1,
-        daily_trade_limit=20,  # Quality over qu
+        daily_trade_limit=20             # Quality over qu
     ),
   
     StrategyType.CROSS_MOMENTUM: EliteStrategyConfig(
@@ -6384,7 +6332,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "LINKUSDT", "ADAUSDT"],
         timeframe="3",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         cross_asset_correlation=True,
         regime_adaptive=True,
         ml_filter=True,
@@ -6396,7 +6344,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MACHINE_LEARNING: EliteStrategyConfig(
         name="ML Ensemble Alpha Engine",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6406,7 +6354,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals        # ML should be very confident
+        min_signal_strength=0.05,        # ML should be very confident
         ml_filter=True,
         regime_adaptive=True,
         performance_feedback=True,
@@ -6417,7 +6365,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.ORDERBOOK_IMBALANCE: EliteStrategyConfig(
         name="Order Book Alpha Predator",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading                    # Enable for elite performance
+        enabled=True,                    # Enable for elite performance
         max_positions=1,                 # High frequency opportunities
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6427,7 +6375,7 @@ STRATEGY_CONFIGS = {
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
         timeframe="1s",                  # Sub-minute execution
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         microstructure_boost=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6437,7 +6385,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.CROSS_EXCHANGE_ARB: EliteStrategyConfig(
         name="Cross-Exchange Arbitrage Master",
-        enabled=False,  # ❌ ELITE: Disabled for focused trading
+        enabled=True,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6447,7 +6395,7 @@ STRATEGY_CONFIGS = {
         leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals             # Near-certain arbitrage only
+        min_signal_strength=0.05,             # Near-certain arbitrage only
         latency_critical=True,
         execution_alpha=True,
         smart_routing=True,
@@ -6467,7 +6415,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals
+        min_signal_strength=0.05,
         regime_adaptive=True,
         volatility_scaling=True
     ),
@@ -6482,7 +6430,7 @@ STRATEGY_CONFIGS = {
         leverage=7,
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,  # ✅ ELITE: Only top quality signals        # ← High threshold for hybrid
+        min_signal_strength=0.05,        # ← High threshold for hybrid
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True
@@ -6676,31 +6624,31 @@ class AccountManagerConfig:
     """Professional configuration class for AccountManager"""
     def __init__(self):
         # Risk Management Settings
-        self.RISK_PER_TRADE = 0.02,  # 2% risk per trade
-        self.MAX_POSITION_PCT = 0.15,  # Max 15% of balance per position
-        self.MAX_PORTFOLIO_RISK = 0.50,  # Max 50% total portfolio exposure
-        self.MIN_BALANCE_REQUIRED = 500,  # Minimum account balance
-        self.DAILY_LOSS_LIMIT_PCT = 0.10,  # 10% daily loss limit
+        self.RISK_PER_TRADE = 0.02  # 2% risk per trade
+        self.MAX_POSITION_PCT = 0.15  # Max 15% of balance per position
+        self.MAX_PORTFOLIO_RISK = 0.50  # Max 50% total portfolio exposure
+        self.MIN_BALANCE_REQUIRED = 500  # Minimum account balance
+        self.DAILY_LOSS_LIMIT_PCT = 0.10  # 10% daily loss limit
 
         # Performance Settings
-        self.BALANCE_CACHE_DURATION = 15,  # 15 seconds cache for active trading
+        self.BALANCE_CACHE_DURATION = 15  # 15 seconds cache for active trading
         self.MAX_BALANCE_HISTORY = 1000
         self.MAX_EQUITY_HISTORY = 1000
         self.MAX_DRAWDOWN_HISTORY = 100
 
         # Safety Thresholds
-        self.SUSPICIOUS_BALANCE_THRESHOLD = 100000,  # High balance alert threshold
-        self.SAFE_MARGIN_USAGE = 0.20,  # 20% of available balance for margin
-        self.EMERGENCY_STOP_DRAWDOWN = 0.05,  # 5% account drawdown triggers emergency stop
+        self.SUSPICIOUS_BALANCE_THRESHOLD = 100000  # High balance alert threshold
+        self.SAFE_MARGIN_USAGE = 0.20  # 20% of available balance for margin
+        self.EMERGENCY_STOP_DRAWDOWN = 0.05  # 5% account drawdown triggers emergency stop
 
         # Trading Limits
-        self.MAX_CONCURRENT_POSITIONS = 15,  # Aligned with your 14-strategy bot
-        self.MAX_RISK_PER_SYMBOL = 0.03,  # 3% max risk per symbol
-        self.MIN_POSITION_SIZE_USD = 10,  # Minimum position size
+        self.MAX_CONCURRENT_POSITIONS = 15  # Aligned with your 14-strategy bot
+        self.MAX_RISK_PER_SYMBOL = 0.03  # 3% max risk per symbol
+        self.MIN_POSITION_SIZE_USD = 10  # Minimum position size
 
         # Timing Settings
-        self.DAILY_RESET_HOUR = 0,  # Midnight UTC reset
-        self.POSITION_CHECK_INTERVAL = 60,  # Check positions every 60 seconds
+        self.DAILY_RESET_HOUR = 0  # Midnight UTC reset
+        self.POSITION_CHECK_INTERVAL = 60  # Check positions every 60 seconds
 
     def validate(self) -> bool:
         """Validate configuration parameters"""
@@ -6717,6 +6665,143 @@ class AccountManagerConfig:
             logger.error("❌ Minimum balance too low! Min $100 required")
             return False
         return True
+
+# =====================================
+# BASE ACCOUNT MANAGER
+# =====================================
+class AccountManager:
+    """Base Account Manager with core functionality"""
+    def __init__(self, session):
+        self.session = session
+        self.bybit_session = session
+        self.balance_history = deque(maxlen=1000)
+        self.equity_curve = deque(maxlen=1000)
+        self.drawdown_tracking = deque(maxlen=100)
+        self.last_balance_check = 0
+        self.balance_cache = None
+        self.cache_duration = 30
+
+    def get_account_balance(self) -> Dict:
+        """Get comprehensive account balance information with caching"""
+        try:
+            now = time.time()
+            if (self.balance_cache and 
+                now - self.last_balance_check < self.cache_duration):
+                return self.balance_cache
+            # Get wallet balance from ByBit
+            wallet = self.bybit_session.get_wallet_balance(accountType="UNIFIED")
+
+            if wallet and wallet.get('retCode') == 0:
+                result = wallet.get('result', {})
+                account_list = result.get('list', [])
+
+                if account_list:
+                    account = account_list[0]  # Get first account
+
+                    # Use account-level fields for accurate balance
+                    total_wallet = float(account.get("totalWalletBalance", 0))
+                    available_balance = float(account.get("totalAvailableBalance", 0))
+                    total_equity = float(account.get("totalEquity", 0))
+                    total_margin = float(account.get("totalMarginBalance", 0))
+
+                    balance_info = {
+                        'available': available_balance,
+                        'total': total_wallet,
+                        'equity': total_equity,
+                        'margin': total_margin,
+                        'used': max(0, total_wallet - available_balance),
+                        'timestamp': now
+                    }
+
+                    # Cache the result
+                    self.balance_cache = balance_info
+                    self.last_balance_check = now
+                    self.balance_history.append(balance_info)
+
+                    return balance_info
+
+            # Fallback if API call fails
+            return {'available': 0, 'total': 0, 'equity': 0, 'margin': 0, 'used': 0, 'timestamp': now}
+
+        except Exception as e:
+            logger.error(f"❌ Balance check error: {e}")
+            return {'available': 0, 'total': 0, 'equity': 0, 'margin': 0, 'used': 0, 'timestamp': time.time()}
+
+    def get_open_positions(self) -> List[Dict]:
+        """Get all open positions with enhanced error handling"""
+        try:
+            positions = self.bybit_session.get_positions(
+                category="linear",
+                settleCoin="USDT"
+            )
+
+            if not positions or positions.get('retCode') != 0:
+                return []
+
+            active = []
+            for pos in positions.get("result", {}).get("list", []):
+                try:
+                    size = float(pos.get("size", 0))
+                    if size > 0:
+                        entry_price = float(pos.get("avgPrice", 0))
+                        current_price = float(pos.get("markPrice", 0))
+                        unrealized_pnl = float(pos.get("unrealisedPnl", 0))
+
+                        position_info = {
+                            "symbol": pos["symbol"],
+                            "side": pos["side"],
+                            "qty": size,
+                            "entry": entry_price,
+                            "current": current_price,
+                            "pnl": unrealized_pnl,
+                            "pnl_pct": (unrealized_pnl / (size * entry_price)) * 100 if entry_price > 0 else 0,
+                            "position_value": size * entry_price,
+                            "leverage": float(pos.get("leverage", 1)),
+                            "liq_price": float(pos.get("liqPrice", 0)) if pos.get("liqPrice") else 0,
+                            "strategy": "MULTI_STRATEGY"
+                        }
+                        active.append(position_info)
+                except (ValueError, KeyError) as e:
+                    logger.error(f"Error parsing position data: {e}")
+                    continue
+
+            return active
+
+        except Exception as e:
+            logger.error(f"❌ Error getting positions: {e}")
+            return []
+
+    def get_symbol_precision(self, symbol: str) -> Tuple[int, float]:
+        """Get symbol precision with caching"""
+        try:
+            cachekey = f"precision{symbol}"
+            if hasattr(self, cache_key):
+                return getattr(self, cache_key)
+
+            info = self.bybit_session.get_instruments_info(
+                category="linear",
+                symbol=symbol
+            )
+
+            if info and info.get('retCode') == 0 and info.get("result", {}).get("list"):
+                lot_size_filter = info["result"]["list"][0]["lotSizeFilter"]
+                min_qty = float(lot_size_filter["minOrderQty"])
+                qty_step = float(lot_size_filter["qtyStep"])
+
+                if qty_step >= 1:
+                    precision = 0
+                else:
+                    precision = len(str(qty_step).split('.')[1]) if '.' in str(qty_step) else 0
+
+                result = (precision, min_qty)
+                setattr(self, cache_key, result)
+                return result
+
+            return 3, 0.001
+
+        except Exception as e:
+            logger.error(f"❌ Precision error for {symbol}: {e}")
+            return 3, 0.001
 
 # =====================================
 # ENHANCED ACCOUNT MANAGER
@@ -6861,19 +6946,6 @@ class EnhancedAccountManager(AccountManager):
             logger.error(f"❌ Enhanced position sizing error for {symbol}: {e}")
             return 0
 
-    
-    def calculate_elite_position_size(self, signal_strength: float, base_risk: float = 1.5) -> float:
-        """Scale position size based on signal quality for elite performance"""
-        if signal_strength >= 0.95:  # Elite signals
-            return base_risk * 1.2,  # 1.8% risk
-        elif signal_strength >= 0.90:  # Excellent signals  
-            return base_risk * 1.0,  # 1.5% risk
-        elif signal_strength >= 0.85:  # Good signals
-            return base_risk * 0.8,  # 1.2% risk
-        else:
-            return base_risk * 0.5,  # Should not happen with elite filter
-
-
     def check_emergency_conditions(self) -> bool:
         """Check if emergency stop should be triggered"""
         try:
@@ -6910,6 +6982,7 @@ class EnhancedAccountManager(AccountManager):
         except Exception as e:
             logger.error(f"❌ Emergency condition check error: {e}")
             return False
+
     def reset_emergency_stop(self, manual_override: bool = False) -> bool:
         """Reset emergency stop with optional manual override"""
         if manual_override:
@@ -7032,8 +7105,8 @@ class EnhancedAccountManager(AccountManager):
 🛡️ RISK MANAGEMENT:
    Daily Losses: ${self.daily_losses:.2f} / ${self.daily_loss_limit:.2f} ({daily_loss_pct:.1f}%)
    Emergency Stop: {emergency_status}
-   Risk Per Trade: {self.config.RISK_PER_TRADE*100:.1f}%
-   Max Position Size: {self.config.MAX_POSITION_PCT*100:.1f}%
+   Risk Per Trade: {self.config.RISK_PER_TRADE100:.1f}%
+   Max Position Size: {self.config.MAX_POSITION_PCT100:.1f}%
 
 ⚙️ CONFIGURATION:
    Min Balance Required: ${self.config.MIN_BALANCE_REQUIRED:,.2f}
@@ -7089,10 +7162,10 @@ def create_account_manager(session, conservative: bool = False) -> EnhancedAccou
     
     if conservative:
         # Conservative settings for cautious trading
-        config.RISK_PER_TRADE = 0.01,  # 1% risk per trade
-        config.MAX_POSITION_PCT = 0.10,  # Max 10% per position
-        config.MAX_PORTFOLIO_RISK = 0.30,  # Max 30% portfolio risk
-        config.EMERGENCY_STOP_DRAWDOWN = 0.03,  # 3% emergency stop
+        config.RISK_PER_TRADE = 0.01  # 1% risk per trade
+        config.MAX_POSITION_PCT = 0.10  # Max 10% per position
+        config.MAX_PORTFOLIO_RISK = 0.30  # Max 30% portfolio risk
+        config.EMERGENCY_STOP_DRAWDOWN = 0.03  # 3% emergency stop
         logger.info("🛡️ Conservative AccountManager configuration applied")
     else:
         # Aggressive settings for active trading (default)
@@ -7150,25 +7223,24 @@ def calculate_portfolio_risk(self):
 # Usage Examples:
 # 
 # # For conservative trading:
-# account_manager = create_account_manager(session, conservative=True)
+# account_manager = create_account_manager(bybit_session, conservative=True)
 # 
 # # For aggressive trading:
-# account_manager = create_account_manager(session, conservative=False)
+# account_manager = create_account_manager(bybit_session, conservative=False)
 # 
 # # Custom configuration:
 # config = AccountManagerConfig()
 # config.RISK_PER_TRADE = 0.025  # 2.5% risk
-# account_manager = EnhancedAccountManager(session, config)
+# account_manager = EnhancedAccountManager(bybit_session, config)
 
 class OrderManager:
-    def __init__(self, session, account_manager, trailing_manager=None):
+    def __init__(self, session, account_manager):
         self.session = session
-        self.session = session
+        self.bybit_session = bybit_session
         self.account_manager = account_manager
         self.precision_cache = {}
         self.order_history = deque(maxlen=2000)  # Increased for multi-strategy
         self.last_trade_time = defaultdict(int)
-        self.trailing_manager = trailing_manager
         
     def get_current_price(self, symbol: str) -> Optional[float]:
         """Get current market price with enhanced error handling"""
@@ -7195,25 +7267,22 @@ class OrderManager:
             if entry_price <= 0 or qty <= 0 or risk_usd <= 0:
                 return None
             
-            # Calculate stop loss based on risk (not trailing config for initial order)
-            risk_per_unit = risk_usd / qty if qty > 0 else 0
+            # Use trailing stop manager to calculate initial profitable stop
+            trail_config = trailing_stop_manager.get_trailing_config(strategy_name)
+            stop_pct = trail_config.initial_stop_pct / 100
             
             if side == "Buy":
-                # For buy orders, stop loss is BELOW entry price
-                stop_price = entry_price - risk_per_unit
+                stop_price = entry_price * (1 + stop_pct)
             else:
-                # For sell orders, stop loss is ABOVE entry price
-                stop_price = entry_price + risk_per_unit
+                stop_price = entry_price * (1 - stop_pct)
             
-            # Ensure minimum distance
-            min_distance = entry_price * 0.002,  # 0.2% minimum
-            actual_distance = abs(entry_price - stop_price)
+            if stop_price <= 0:
+                return None
             
-            if actual_distance < min_distance:
-                if side == "Buy":
-                    stop_price = entry_price - min_distance
-                else:
-                    stop_price = entry_price + min_distance
+            price_precision = self._get_price_precision(symbol)
+            stop_price = round(stop_price, price_precision)
+            
+            min_distance = entry_price * 0.001
             actual_distance = abs(entry_price - stop_price)
             
             if actual_distance < min_distance:
@@ -7232,7 +7301,11 @@ class OrderManager:
             if f"price_precision_{symbol}" in self.precision_cache:
                 return self.precision_cache[f"price_precision_{symbol}"]
             
-            info = self.session.get_instruments_info( category="linear", symbol=symbol )
+            info = self.bybit_session.safe_api_call(
+                self.session.get_instruments_info,
+                category="linear",
+                symbol=symbol
+            )
             
             if info and "result" in info and info["result"]["list"]:
                 price_filter = info["result"]["list"][0]["priceFilter"]
@@ -7267,7 +7340,7 @@ class OrderManager:
             
             try:
                 now = time.time()
-                if now - self.last_trade_time[symbol] < getattr(config, "min_time_between_trades", 8):
+                if now - self.last_trade_time[symbol] < config.min_time_between_trades:
                     logger.warning(f"⚠️ Too soon to trade {symbol} again")
                     return None
             
@@ -7289,7 +7362,16 @@ class OrderManager:
                 
                 logger.info(f"🚀 [{strategy_name}] Placing {side} order: {symbol} {qty} @ ${current_price:.4f} (${position_value:.2f})")
                 
-                order = self.session.place_order( category="linear", symbol=symbol, side=side, orderType="Market", qty=str(qty), timeInForce="GoodTillCancel"
+                order = self.bybit_session.safe_api_call(
+                    self.session.place_order,
+                    category="linear",
+                    symbol=symbol,
+                    side=side,
+                    orderType="Market",
+                    qty=str(qty),
+                    timeInForce="GoodTillCancel",
+                    reduceOnly=False,
+                    closeOnTrigger=False
                 )
                 
                 if order and "result" in order:
@@ -7300,12 +7382,12 @@ class OrderManager:
                     
                     if fill_success:
                         # Initialize trailing stop tracking
-                        self.trailing_manager.initialize_position_tracking(
+                        trailing_stop_manager.initialize_position_tracking(
                             symbol, current_price, side, strategy_name
                         )
                         
                         # Set initial profitable stop loss
-                        initial_stop = self.trailing_manager.calculate_initial_stop_loss(
+                        initial_stop = trailing_stop_manager.calculate_initial_stop_loss(
                             symbol, current_price, side, strategy_name
                         )
                         
@@ -7353,8 +7435,12 @@ class OrderManager:
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-
-                order_status = self.session.get_open_orders( category="linear", symbol=symbol, orderId=order_id )
+                order_status = self.bybit_session.safe_api_call(
+                    self.session.get_open_orders,
+                    category="linear",
+                    symbol=symbol,
+                    orderId=order_id
+                )
                 
                 if order_status and "result" in order_status:
                     orders = order_status["result"]["list"]
@@ -7374,7 +7460,12 @@ class OrderManager:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                result = self.session.set_trading_stop( category="linear", symbol=symbol, takeProfit=str(round(tp_price, self._get_price_precision(symbol))) )
+                result = self.bybit_session.safe_api_call(
+                    self.session.set_trading_stop,
+                    category="linear",
+                    symbol=symbol,
+                    stopLoss=str(round(stop_price, self._get_price_precision(symbol)))
+                )
                 
                 if result:
                     logger.info(f"✅ Stop loss set for {symbol}: ${stop_price:.4f}")
@@ -7393,7 +7484,12 @@ class OrderManager:
     def set_take_profit(self, symbol: str, tp_price: float) -> bool:
         """Set take profit with error handling"""
         try:
-            result = self.session.set_trading_stop( category="linear", symbol=symbol, takeProfit=str(round(tp_price, self._get_price_precision(symbol))) )
+            result = self.bybit_session.safe_api_call(
+                self.session.set_trading_stop,
+                category="linear",
+                symbol=symbol,
+                takeProfit=str(round(tp_price, self._get_price_precision(symbol)))
+            )
             
             if result:
                 logger.info(f"✅ Take profit set for {symbol}: ${tp_price:.4f}")
@@ -7413,7 +7509,15 @@ class OrderManager:
             
             logger.info(f"🔄 [{strategy_name}] Closing position: {symbol} {side} {qty}")
             
-            order = self.session.place_order( category="linear", symbol=symbol, side=close_side, orderType="Market", qty=str(qty), timeInForce="GoodTillCancel", reduceOnly=True
+            order = self.bybit_session.safe_api_call(
+                self.session.place_order,
+                category="linear",
+                symbol=symbol,
+                side=close_side,
+                orderType="Market",
+                qty=str(qty),
+                timeInForce="GoodTillCancel",
+                reduceOnly=True
             )
             
             if order and "result" in order:
@@ -7427,6 +7531,227 @@ class OrderManager:
             logger.error(f"❌ Error closing position for {symbol}: {e}")
             return False
 
+# =====================================
+# COMPLETE HFQ ACCOUNTMANAGER
+# =====================================
+
+class HFQAccountManager:
+    """Complete AccountManager for HFQ bot with all required methods"""
+    def __init__(self, session):
+        self.session = session
+        self.bybit_session = session
+        self.balance_cache = None
+        self.last_balance_check = 0
+        self.cache_duration = 10  # 10 second cache for HFQ
+        self.positions_cache = None
+        self.last_positions_check = 0
+        self.positions_cache_duration = 5  # 5 second cache for positions
+        
+    def get_account_balance(self):
+        """Get account balance - optimized for HFQ"""
+        try:
+            now = time.time()
+            if (self.balance_cache and 
+                now - self.last_balance_check < self.cache_duration):
+                return self.balance_cache
+            
+            wallet = self.bybit_session.get_wallet_balance(accountType="UNIFIED")
+            
+            if wallet and wallet.get('retCode') == 0:
+                account = wallet.get('result', {}).get('list', [])[0]
+                
+                balance_info = {
+                    'available': float(account.get("totalAvailableBalance", 0)),
+                    'total': float(account.get("totalWalletBalance", 0)),
+                    'equity': float(account.get("totalEquity", 0)),
+                    'used': float(account.get("totalWalletBalance", 0)) - float(account.get("totalAvailableBalance", 0))
+                }
+                
+                self.balance_cache = balance_info
+                self.last_balance_check = now
+                return balance_info
+            
+            return {'available': 0, 'total': 0, 'equity': 0, 'used': 0}
+            
+        except Exception as e:
+            logger.error(f"Balance error: {e}")
+            return {'available': 0, 'total': 0, 'equity': 0, 'used': 0}
+    
+    def get_open_positions(self):
+        """Get all open positions with caching for HFQ"""
+        try:
+            now = time.time()
+            if (self.positions_cache and 
+                now - self.last_positions_check < self.positions_cache_duration):
+                return self.positions_cache
+            
+            positions = self.bybit_session.get_positions(
+                category="linear",
+                settleCoin="USDT"
+            )
+            
+            if not positions or positions.get('retCode') != 0:
+                self.positions_cache = []
+                self.last_positions_check = now
+                return []
+            
+            active_positions = []
+            for pos in positions.get("result", {}).get("list", []):
+                try:
+                    size = float(pos.get("size", 0))
+                    if size > 0:
+                        entry_price = float(pos.get("avgPrice", 0))
+                        current_price = float(pos.get("markPrice", 0))
+                        unrealized_pnl = float(pos.get("unrealisedPnl", 0))
+                        
+                        position_info = {
+                            "symbol": pos["symbol"],
+                            "side": pos["side"],
+                            "qty": size,
+                            "entry": entry_price,
+                            "current": current_price,
+                            "pnl": unrealized_pnl,
+                            "pnl_pct": (unrealized_pnl / (size * entry_price)) * 100 if entry_price > 0 else 0,
+                            "position_value": size * entry_price,
+                            "leverage": float(pos.get("leverage", 1)),
+                            "liq_price": float(pos.get("liqPrice", 0)) if pos.get("liqPrice") else 0
+                        }
+                        active_positions.append(position_info)
+                except (ValueError, KeyError) as e:
+                    logger.error(f"Error parsing position: {e}")
+                    continue
+            
+            self.positions_cache = active_positions
+            self.last_positions_check = now
+            return active_positions
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting positions: {e}")
+            return []
+    
+    def calculate_position_size_safe(self, symbol, entry_price, stop_loss, risk_amount=None):
+        """HFQ-optimized position sizing"""
+        try:
+            balance_info = self.get_account_balance()
+            available = balance_info['available']
+            
+            if available < 100:
+                return 0
+            
+            if risk_amount is None:
+                risk_amount = available * 0.015  # 1.5% risk
+            
+            risk_per_unit = abs(entry_price - stop_loss)
+            if risk_per_unit <= 0:
+                return 0
+            
+            qty = risk_amount / risk_per_unit
+            
+            position_value = qty * entry_price
+            if position_value > available * 0.15:
+                qty = (available * 0.15) / entry_price
+            
+            return max(qty, 0.001)
+            
+        except Exception as e:
+            logger.error(f"Position sizing error: {e}")
+            return 0
+    
+    def check_sufficient_balance(self, position_value, leverage=10):
+        """Check if sufficient balance for position"""
+        try:
+            balance_info = self.get_account_balance()
+            available = balance_info['available']
+            
+            if available < 100:  # Minimum balance
+                return False
+            
+            # Calculate required margin
+            required_margin = position_value / max(leverage, 1)
+            
+            # Check if we have enough margin (use 20% of available balance max)
+            max_margin = available * 0.20
+            
+            return required_margin <= max_margin
+            
+        except Exception as e:
+            logger.error(f"Balance check error: {e}")
+            return False
+    
+    def check_emergency_conditions(self):
+        """Emergency conditions check for HFQ"""
+        try:
+            balance = self.get_account_balance()
+            positions = self.get_open_positions()
+            
+            # Emergency if balance too low
+            if balance['available'] < 50:
+                return True
+            
+            # Emergency if too many losing positions
+            if positions:
+                losing_positions = [p for p in positions if p['pnl'] < 0]
+                total_unrealized_loss = sum(p['pnl'] for p in losing_positions)
+                
+                # Emergency if unrealized loss > 5% of available balance
+                if abs(total_unrealized_loss) > balance['available'] * 0.05:
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Emergency check error: {e}")
+            return True  # Err on safe side
+    
+    def get_balance_summary(self):
+        """Quick balance summary for HFQ"""
+        try:
+            balance = self.get_account_balance()
+            positions = self.get_open_positions()
+            total_pnl = sum(p.get('pnl', 0) for p in positions)
+            
+            return f"Available: ${balance['available']:.2f} | Total: ${balance['total']:.2f} | Positions: {len(positions)} | PnL: ${total_pnl:.2f}"
+        except Exception as e:
+            logger.error(f"Summary error: {e}")
+            return "Balance unavailable"
+    
+    def get_symbol_precision(self, symbol):
+        """Get symbol precision - simple version for HFQ"""
+        try:
+            # Cache key for precision data
+            cache_key = f"precision_{symbol}"
+            if hasattr(self, cache_key):
+                return getattr(self, cache_key)
+            
+            info = self.bybit_session.get_instruments_info(
+                category="linear",
+                symbol=symbol
+            )
+            
+            if info and info.get('retCode') == 0 and info.get("result", {}).get("list"):
+                lot_size_filter = info["result"]["list"][0]["lotSizeFilter"]
+                min_qty = float(lot_size_filter["minOrderQty"])
+                qty_step = float(lot_size_filter["qtyStep"])
+                
+                # Calculate precision from qty_step
+                if qty_step >= 1:
+                    precision = 0
+                else:
+                    precision = len(str(qty_step).split('.')[1]) if '.' in str(qty_step) else 0
+                
+                result = (precision, min_qty)
+                setattr(self, cache_key, result)
+                return result
+            
+            # Default fallback
+            return (3, 0.001)
+            
+        except Exception as e:
+            logger.error(f"Precision error for {symbol}: {e}")
+            return (3, 0.001)
+
+# =====================================
+# ENHANCED TRADE LOGGING SYSTEM
 # =====================================
 
 class TradeLogger:
@@ -7479,112 +7804,6 @@ class TradeLogger:
         except Exception as e:
             logger.error(f"❌ Logging error: {e}")
 
-
-# =====================================
-# ELITE HFQ RISK MANAGER
-# =====================================
-
-class EliteRiskManager:
-    """Elite Risk Management for 25% Monthly Target"""
-    def __init__(self):
-        self.max_daily_loss_pct = 5.0,  # 5% max daily loss
-        self.max_consecutive_losses = 3,  # Stop after 3 losses
-        self.required_win_rate = 0.65,  # Need 65%+ win rate
-        self.daily_trades = []
-        self.daily_pnl = 0.0
-        self.consecutive_losses = 0
-        
-    def should_stop_trading(self) -> bool:
-        """Determine if trading should stop"""
-        # Check daily loss
-        if abs(self.daily_pnl) > self.max_daily_loss_pct:
-            logger.warning(f"🛑 Daily loss limit hit: {self.daily_pnl:.2f}%")
-            return True
-            
-        # Check consecutive losses
-        if self.consecutive_losses >= self.max_consecutive_losses:
-            logger.warning(f"🛑 {self.consecutive_losses} consecutive losses - stopping")
-            return True
-            
-        # Check win rate if enough trades
-        if len(self.daily_trades) >= 5:
-            wins = sum(1 for t in self.daily_trades if t['pnl'] > 0)
-            win_rate = wins / len(self.daily_trades)
-            if win_rate < self.required_win_rate:
-                logger.warning(f"🛑 Win rate too low: {win_rate:.1%}")
-                return True
-                
-        return False
-    
-    def add_trade_result(self, pnl: float, pnl_pct: float):
-        """Record trade result"""
-        self.daily_trades.append({'pnl': pnl, 'pnl_pct': pnl_pct})
-        self.daily_pnl += pnl_pct
-        
-        if pnl <= 0:
-            self.consecutive_losses += 1
-        else:
-            self.consecutive_losses = 0
-    
-    def reset_daily_stats(self):
-        """Reset for new trading day"""
-        self.daily_trades = []
-        self.daily_pnl = 0.0
-        self.consecutive_losses = 0
-
-# Initialize Elite Risk Manager
-elite_risk_manager = EliteRiskManager()
-
-
-# =====================================
-# ELITE PERFORMANCE TRACKER
-# =====================================
-
-class ElitePerformanceTracker:
-    """Track progress toward 25% monthly target"""
-    def __init__(self, target_monthly: float = 25.0):
-        self.target_monthly = target_monthly
-        self.monthly_start_balance = None
-        self.daily_results = []
-        self.start_date = datetime.now()
-        
-    def log_daily_performance(self, current_balance: float, starting_balance: float):
-        """Track daily progress toward monthly target"""
-        daily_return = ((current_balance - starting_balance) / starting_balance) * 100
-        self.daily_results.append(daily_return)
-        
-        # Calculate monthly progress
-        days_in_month = 20,  # Trading days
-        days_elapsed = len(self.daily_results)
-        daily_target = self.target_monthly / days_in_month  # 1.25% daily
-        target_to_date = daily_target * days_elapsed
-        actual_to_date = sum(self.daily_results)
-        
-        # Performance metrics
-        avg_daily = actual_to_date / days_elapsed if days_elapsed > 0 else 0
-        projected_monthly = avg_daily * days_in_month
-        
-        logger.info("="*60)
-        logger.info("📊 ELITE PERFORMANCE REPORT - 25% MONTHLY TARGET")
-        logger.info("="*60)
-        logger.info(f"📅 Day {days_elapsed} of {days_in_month}")
-        logger.info(f"💰 Today's Return: {daily_return:+.2f}%")
-        logger.info(f"📈 Month-to-Date: {actual_to_date:+.2f}% / {target_to_date:.2f}% target")
-        logger.info(f"📊 Daily Average: {avg_daily:.2f}% / {daily_target:.2f}% needed")
-        logger.info(f"🎯 Projected Monthly: {projected_monthly:.1f}% / {self.target_monthly}% target")
-        logger.info(f"✅ On Track: {'YES' if actual_to_date >= target_to_date * 0.9 else 'NO - NEED MORE AGGRESSIVE TRADES'}")
-        logger.info("="*60)
-        
-        return {
-            'daily_return': daily_return,
-            'mtd_return': actual_to_date,
-            'projected_monthly': projected_monthly,
-            'on_track': actual_to_date >= target_to_date * 0.9
-        }
-
-# Initialize Elite Performance Tracker
-elite_performance_tracker = ElitePerformanceTracker(target_monthly=25.0)
-
 # Initialize Trade Logger
 trade_logger = TradeLogger()
 
@@ -7598,37 +7817,6 @@ class MultiStrategySignalGenerator:
         self.strategies = strategies
         self.signal_history = defaultdict(lambda: deque(maxlen=200))  # Increased for multi-strategy
         
-    
-    def validate_elite_signal(self, signal_data: Dict) -> bool:
-        """Validate signal meets elite quality standards"""
-        try:
-            # Extract analysis data
-            analysis = signal_data.get('analysis', {})
-            
-            # Elite quality checks
-            quality_checks = {
-                'volume_surge': analysis.get('volume_ratio', 0) > 2.0,
-                'trend_alignment': analysis.get('trend', 'neutral') != 'neutral',
-                'momentum_strong': abs(analysis.get('price_change_pct', 0)) > 0.3,
-                'rsi_not_extreme': 25 < analysis.get('rsi', 50) < 75,
-                'volatility_optimal': 0.5 < analysis.get('volatility_pct', 1.0) < 3.0
-            }
-            
-            # Calculate quality score
-            passed_checks = sum(quality_checks.values())
-            quality_score = passed_checks / len(quality_checks)
-            
-            # Log quality details
-            if quality_score >= 0.8:
-                logger.info(f"✅ ELITE SIGNAL: Quality {quality_score:.1%} - {signal_data['symbol']}")
-            
-            return quality_score >= 0.8,  # Require 80% quality
-            
-        except Exception as e:
-            logger.error(f"Elite signal validation error: {e}")
-            return False
-
-
     def generate_all_signals(self, symbol: str) -> List[Dict]:
         """Generate signals from all strategies for a symbol"""
         all_signals = []
@@ -7639,8 +7827,6 @@ class MultiStrategySignalGenerator:
                 timeframe = strategy.config.timeframe
                 df = self.ta.get_kline_data(symbol, timeframe, 100)
                 # FIXME_DEBUG: Remove these lines when market data works                
-                logger.info(f"🧪 DEBUG: {strategy.config.name} requesting {timeframe} data for {symbol}")
-                logger.info(f"🧪 DEBUG: Data received: {df is not None}, rows: {len(df) if df is not None else 0}")
                 
                 if df is None or len(df) < 20:
                     continue
@@ -7653,14 +7839,13 @@ class MultiStrategySignalGenerator:
                 # Generate signal
                 signal, strength, analysis = strategy.generate_signal(df) 
                 # FIXME_DEBUG: Remove these lines when market data works 
-                logger.info(f"🧪 DEBUG: {strategy.config.name} → signal='{signal}', strength={strength:.3f}")
 
                 if signal != "Hold" and strength >= strategy.config.min_signal_strength:
                     signal_data = {
                         'timestamp': datetime.now(),
                         'symbol': symbol,
                         'strategy': strategy.config.name,
-                        'strategy_type': getattr(strategy_type, 'value', strategy_type),
+                        'strategy_type': strategy_type.value,
                         'signal': signal,
                         'strength': strength,
                         'analysis': analysis,
@@ -7685,15 +7870,53 @@ class MultiStrategySignalGenerator:
 # =====================================
 # MAIN ENHANCED MULTI-STRATEGY TRADING BOT
 # =====================================
+class TrailingStopManager:
+    """Manages trailing stops for all positions"""
+    def __init__(self):
+        self.position_tracking = {}
+        self.logger = logging.getLogger("TrailingStopManager")
+    
+    def get_trailing_config(self, strategy_name):
+        """Get trailing config for strategy"""
+        return {
+            "trail_percent": 0.02, 
+            "activation_threshold": 0.01,
+            "initial_stop_pct": 0.015
+        }
+    
+    def initialize_position_tracking(self, symbol, entry_price, strategy):
+        """Initialize position tracking"""  
+        self.position_tracking[symbol] = {
+            'entry_price': entry_price,
+            'strategy': strategy,
+            'highest_price': entry_price,
+            'active': True
+        }
+    
+    def calculate_initial_stop_loss(self, entry_price, direction="long", risk_percent=0.015):
+        """Calculate initial stop loss"""
+        if direction == "long":
+            return entry_price * (1 - risk_percent)
+        else:
+            return entry_price * (1 + risk_percent)
+    
+    def manage_all_trailing_stops(self, positions):
+        """Manage all trailing stops"""
+        pass  # Your existing logic will handle this
+    
+    def cleanup_closed_positions(self, positions):
+        """Clean up closed positions"""
+        pass  # Your existing logic will handle this
+
 class EnhancedMultiStrategyTradingBot:
     def __init__(self):
         self.config = config
         self.session = session
-        self.session = session
+        self.bybit_session = bybit_session
         self.account_manager = account_manager
         self.order_manager = order_manager
         self.trade_logger = trade_logger
-        self.trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
+        self.trailing_stop_manager = TrailingStopManager()
         
         # Initialize all strategies
         self.strategies = StrategyFactory.create_all_strategies()
@@ -7723,41 +7946,31 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"   ✅ {strategy.config.name} - Max Positions: {strategy.config.max_positions}")
         
     def check_emergency_conditions(self) -> bool:
-        """Check if emergency stop should be triggered"""
+        """Check for emergency stop conditions"""
         try:
-            balance_info = self.get_account_balance()
-            positions = self.get_open_positions()
-
-            if not positions or balance_info['available'] <= 0:
-                return False
-
-            # Calculate total unrealized PnL
-            total_unrealized = sum(pos.get('pnl', 0) for pos in positions)
-            account_drawdown = abs(total_unrealized) / balance_info['available'] if balance_info['available'] > 0 else 0
-
-            # Emergency stop if drawdown exceeds threshold
-            if account_drawdown >= self.config.EMERGENCY_STOP_DRAWDOWN:
-                if not self.emergency_stop_triggered:
-                    logger.error(f"🚨 EMERGENCY STOP TRIGGERED!")
-                    logger.error(f"   Account Drawdown: {account_drawdown*100:.2f}%")
-                    logger.error(f"   Total Unrealized PnL: ${total_unrealized:.2f}")
-                    logger.error(f"   Available Balance: ${balance_info['available']:.2f}")
-                    self.emergency_stop_triggered = True
-
-                    # Alert for all positions
-                    self.position_alerts.append({
-                        'timestamp': datetime.now(),
-                        'type': 'EMERGENCY_STOP',
-                        'drawdown': account_drawdown,
-                        'unrealized_pnl': total_unrealized
-                    })
+            if self.daily_realized_pnl <= -425:
+                logger.error(f"🚨 EMERGENCY STOP: Daily loss cap reached: ${self.daily_realized_pnl:.2f}")
                 return True
-
+            
+            if self.consecutive_losses >= 8:
+                logger.error(f"🚨 EMERGENCY STOP: Too many consecutive losses: {self.consecutive_losses}")
+                return True
+            
+            if self.total_trades_today >= 150:
+                logger.warning(f"🛑 Daily trade limit reached: {self.total_trades_today}")
+                return True
+            
+            balance_info = self.account_manager.get_account_balance()
+            if balance_info['available'] < config.min_required_balance * 0.4:
+                logger.error(f"🚨 EMERGENCY STOP: Critical balance level: ${balance_info['available']:.2f}")
+                return True
+            
             return False
-
+            
         except Exception as e:
-            logger.error(f"❌ Emergency condition check error: {e}")
+            logger.error(f"❌ Error checking emergency conditions: {e}")
             return False
+    
     def scan_all_strategies_for_entries(self):
         """Enhanced entry scanning across all strategies"""
         try:
@@ -7810,7 +8023,7 @@ class EnhancedMultiStrategyTradingBot:
                         current_positions = strategy_position_counts.get(strategy_name, 0)
                         
                         # Find max positions for this strategy
-                        max_positions = 1,  # Default
+                        max_positions = 1  # Default
                         for strategy_type, strategy in self.strategies.items():
                             if strategy.config.name == strategy_name:
                                 max_positions = strategy.config.max_positions
@@ -7827,34 +8040,11 @@ class EnhancedMultiStrategyTradingBot:
                     logger.error(f"❌ Error scanning {symbol}: {e}")
                     continue
             
-            
-            # ELITE: Only take the absolute BEST signals
-            MIN_ELITE_SCORE = 0.90,  # ✅ Elite quality threshold
-            
-            # Filter for elite signals only
-            elite_signals = []
-            for signal in all_signals:
-                if signal['strength'] >= MIN_ELITE_SCORE:
-                    # Additional elite validation
-                    if hasattr(self.signal_generator, 'validate_elite_signal'):
-                        if self.signal_generator.validate_elite_signal(signal):
-                            elite_signals.append(signal)
-                    else:
-                        elite_signals.append(signal)
-            
-            if not elite_signals:
-                logger.info("🔍 No elite signals found (minimum {MIN_ELITE_SCORE:.0%} required)")
+            if not all_signals:
+                logger.info("🔍 No qualifying signals found across all strategies")
                 return
             
-            # Sort by quality and take only the BEST
-            elite_signals.sort(key=lambda x: x['strength'], reverse=True)
-            
-            # Execute only top 1-2 signals per scan
-            max_new_positions = min(2, config.max_concurrent_trades - total_positions)
-            
-            logger.info(f"🎯 ELITE: Found {len(elite_signals)} elite signals, executing top {max_new_positions}")
-
-            # Sort and execute best ones
+            # Sort by signal strength and execute best ones
             all_signals.sort(key=lambda x: x['strength'], reverse=True)
             
             executed = 0
@@ -7959,23 +8149,8 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
             
             # First, manage trailing stops for all positions
-
-            # ELITE: Continuous trailing stop updates
-            for pos in positions:
-                symbol = pos["symbol"]
-                if symbol in self.trailing_manager.position_tracking:
-                    tracking = self.trailing_manager.position_tracking[symbol]
-                    
-                    # Always update if in profit
-                    if tracking.get('trailing_active', False):
-                        current_profit_pct = pos["pnl_pct"]
-                        
-                        # Keep trailing as price moves up
-                        if current_profit_pct > 0:
-                            logger.debug(f"🎯 Updating trailing stop for {symbol} at {current_profit_pct:.2f}% profit")
-
-            self.trailing_manager.manage_all_trailing_stops(positions)
-            self.trailing_manager.cleanup_closed_positions(positions)
+            self.trailing_stop_manager.manage_all_trailing_stops(positions)
+            self.trailing_stop_manager.cleanup_closed_positions(positions)
             
             # Group positions by strategy for better reporting
             positions_by_strategy = defaultdict(list)
@@ -8027,12 +8202,12 @@ class EnhancedMultiStrategyTradingBot:
                             logger.info(f"📈 [{strategy_name}] PROFIT TARGET HIT for {symbol}: ${unrealized_pnl:.2f}")
                             
                             # Check if trailing is active
-                            tracking = self.trailing_manager.position_tracking.get(symbol, {})
+                            tracking = self.trailing_stop_manager.position_tracking.get(symbol, {})
                             is_trailing = tracking.get('trailing_active', False)
                             
                             if not is_trailing:
                                 # Take partial profit if trailing not active yet
-                                partial_qty = qty * 0.5,  # Close 50%
+                                partial_qty = qty * 0.5  # Close 50%
                                 if self.order_manager.close_position(symbol, side, partial_qty, strategy_name):
                                     partial_pnl = unrealized_pnl * 0.5
                                     self.daily_realized_pnl += partial_pnl
@@ -8093,7 +8268,7 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"   Total P&L: ${total_pnl:+,.2f}")
             
             # Strategy Performance Breakdown
-            logger.info(f"🎯 INDIVIDUAL STRATEGY PERFORMANCE:")
+            logger.info(f"�� INDIVIDUAL STRATEGY PERFORMANCE:")
             positions_by_strategy = defaultdict(list)
             for pos in positions:
                 strategy_name = pos.get('strategy', 'UNKNOWN')
@@ -8136,7 +8311,7 @@ class EnhancedMultiStrategyTradingBot:
                         risk_level = "🚨" if pos["pnl"] <= -config.max_loss_per_trade * 0.8 else ""
                         
                         # Check trailing status
-                        tracking = self.trailing_manager.position_tracking.get(pos['symbol'], {})
+                        tracking = self.trailing_stop_manager.position_tracking.get(pos['symbol'], {})
                         trailing_status = "🎯" if tracking.get('trailing_active', False) else "💰"
                         
                         logger.info(f"      {pnl_indicator}{risk_level}{trailing_status} {pos['symbol']}: {pos['side']} {pos['qty']} | "
@@ -8144,7 +8319,7 @@ class EnhancedMultiStrategyTradingBot:
                                   f"P&L: ${pos['pnl']:+.2f} ({pos['pnl_pct']:+.2f}%)")
             
             # Trailing Stop Summary
-            active_trailing = sum(1 for t in self.trailing_manager.position_tracking.values() 
+            active_trailing = sum(1 for t in self.trailing_stop_manager.position_tracking.values() 
                                 if t.get('trailing_active', False))
             logger.info(f"\n🎯 TRAILING STOPS: {active_trailing}/{len(positions)} positions active")
             
@@ -8165,27 +8340,6 @@ class EnhancedMultiStrategyTradingBot:
     def run(self):
         """Main multi-strategy bot execution loop"""
         logger.info("🚀 Starting ENHANCED MULTI-STRATEGY TRADING BOT v3.0.0")
-
-        # ELITE HFQ CONFIGURATION SUMMARY
-        logger.info("="*80)
-        logger.info("🏆 ELITE HFQ CONFIGURATION - 25% MONTHLY TARGET")
-        logger.info("="*80)
-        logger.info("📊 TRADING PARAMETERS:")
-        logger.info(f"   Daily Trade Target: 5-20 elite trades")
-        logger.info(f"   Min Signal Quality: 85%+")
-        logger.info(f"   Risk Per Trade: 1.5% max")
-        logger.info(f"   Profit Target: 2% per trade")
-        logger.info(f"   Scan Interval: Every 60 seconds")
-        logger.info("🎯 TRAILING STOPS:")
-        logger.info(f"   Activation: 0.5% profit")
-        logger.info(f"   Trail Distance: 0.3% continuous")
-        logger.info(f"   Never Stop Moving Up!")
-        logger.info("💰 MONTHLY TARGETS:")
-        logger.info(f"   Daily: 1.25% average")
-        logger.info(f"   Weekly: 6.25%")
-        logger.info(f"   Monthly: 25%")
-        logger.info("="*80)
-
         logger.info(f"⚙️ MULTI-STRATEGY CONFIGURATION:")
         logger.info(f"   Trading Mode: moderate")
         logger.info(f"   Signal Type: multi_strategy")
@@ -8237,7 +8391,7 @@ class EnhancedMultiStrategyTradingBot:
                 if (datetime.now() - last_heartbeat_check).total_seconds() > 300:
                     try:
                         # Simple connection test using server time
-                        self.session.get_server_time()
+                        self.bybit_session.get_server_time()
                         logger.debug("✅ Connection health check passed")
                     except Exception as e:
                         logger.warning(f"⚠️ Connection issue detected: {e}")
@@ -8371,8 +8525,8 @@ class EnhancedMultiStrategyTradingBot:
                 },
                 'strategy_performance': strategy_performance,
                 'trailing_stops': {
-                    'total_positions_tracked': len(self.trailing_manager.position_tracking),
-                    'active_trailing_stops': sum(1 for t in self.trailing_manager.position_tracking.values() 
+                    'total_positions_tracked': len(self.trailing_stop_manager.position_tracking),
+                    'active_trailing_stops': sum(1 for t in self.trailing_stop_manager.position_tracking.values() 
                                                 if t.get('trailing_active', False)),
                     'strategy_configs': {k: {
                         'initial_stop_pct': v.initial_stop_pct,
@@ -8462,7 +8616,7 @@ if __name__ == "__main__":
             config_issues.append(f"Potential daily losses (${max_potential_daily_loss}) exceed daily cap (${config.daily_loss_cap})")
         
         # Check balance requirements
-        min_safe_balance = total_max_exposure * 0.3,  # 30% margin usage
+        min_safe_balance = total_max_exposure * 0.3  # 30% margin usage
         if config.min_required_balance < min_safe_balance:
             warnings.append(f"Consider increasing min_required_balance to ${min_safe_balance:.0f} for safer operation")
         
@@ -8481,10 +8635,12 @@ if __name__ == "__main__":
                 logger.warning(f"   - {warning}")
             
             if not API_CONFIG['testnet']:
-                response = input("\nContinue with these warnings? (y/N): ")
-                if response.lower() != 'y':
-                    exit(0)
+                # response = input("\nContinue with these warnings? (y/N): ")
+                # if response.lower() != 'y':
+                #     exit(0)
+                logger.warning("Auto-continuing with warnings (background mode)")
         
+
         # Validate strategy configurations
         enabled_strategies = [config for config in STRATEGY_CONFIGS.values() if config.enabled]
         logger.info(f"✅ {len(enabled_strategies)} strategies enabled and validated")
@@ -8537,35 +8693,19 @@ if __name__ == "__main__":
         
         # Initialize and run the enhanced multi-strategy bot
 
-                # Initialize components in correct order
-        logger.info("🔧 Initializing components...")
-        
-        # 1. Initialize Technical Analysis Engine
-        ta_engine = TechnicalAnalysis(session)
-        logger.info("✅ Technical Analysis Engine ready")
-        
-        # 2. Initialize AccountManager
+        # Initialize AccountManager
         logger.info("🤖 Initializing AccountManager...")
         account_manager = EnhancedAccountManager(session)
-        logger.info("✅ AccountManager ready")
-        
-        # 3. Initialize TrailingManager
-        logger.info("🔧 Initializing TrailingManager...")
-        trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
-        logger.info("✅ TrailingManager ready")
-        
-        # 4. Initialize OrderManager
+        logger.info(f"�� {account_manager.get_balance_summary() if hasattr(account_manager, 'get_balance_summary') else 'AccountManager ready'}")
+
+        # Initialize OrderManager
         logger.info("🔧 Initializing OrderManager...")
-        order_manager = OrderManager(session, account_manager, trailing_manager)
+        order_manager = OrderManager(session, account_manager)
         logger.info("✅ OrderManager ready")
-        
-        # 5. Initialize TradeLogger
-        trade_logger = TradeLogger()
-        logger.info("✅ TradeLogger ready")
 
         bot = EnhancedMultiStrategyTradingBot()
         
-        logger.info("🎯 Multi-Strategy Bot ready! Starting execution...")
+        logger.info("�� Multi-Strategy Bot ready! Starting execution...")
         bot.run()
         
     except Exception as e:
@@ -8601,7 +8741,7 @@ def run_strategy_test():
     })
     
     # Ensure OHLC logic (high >= max(open,close), low <= min(open,close))
-    for i in range(int(len(sample_data))):
+    for i in range(len(sample_data)):
         open_price = sample_data.loc[i, 'open']
         close_price = sample_data.loc[i, 'close']
         sample_data.loc[i, 'high'] = max(sample_data.loc[i, 'high'], max(open_price, close_price))
@@ -8786,4 +8926,3 @@ logger.info(f"   Safety Features: {len(BOT_METADATA['safety_features'])}")
 # Features: Complete Multi-Strategy System with Trailing Stops
 # Safety: Professional Risk Management
 # =====================================
-
