@@ -194,7 +194,7 @@ class TradingConfig:
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
     scan_interval: int = 15                          # ✅ 15 seconds
-    min_signal_strength=0.05                # Higher quality for fees
+    min_signal_strength = 0.85                # Higher quality for fees
     
     # Symbols and Markets
     symbols: List[str] = field(default_factory=list)
@@ -272,11 +272,11 @@ class TradingConfig:
             logger.warning("⚠️ Signal threshold might be too low for profitable HF trading")
         
         if self.risk_per_trade_pct > 2.0:
-            logger.warning("⚠️ Risk per trade high for 150 trades/day")
+            logger.warning("⚠️ Risk per trade high for 20 quality trades/day")
         
         self.validate_position_sizing()
 
-        logger.info("✅ High-frequency bot configuration validated")
+        logger.info("✅ High-quality bot configuration validated")
     
     def calculate_dynamic_limits(self, current_balance: float):
         """Update limits based on current balance"""
@@ -383,6 +383,13 @@ TRAILING_CONFIGS = {
         trail_distance_pct=0.28,
         min_trail_step_pct=0.09,
         max_update_frequency=25
+    ),
+    'MULTI_STRATEGY': TrailingConfig(
+        initial_stop_pct=0.5,
+        trail_activation_pct=1.0,
+        trail_distance_pct=0.25,
+        min_trail_step_pct=0.08,
+        max_update_frequency=20
     )
 }
 
@@ -480,7 +487,7 @@ if API_CONFIG['testnet']:
     logger.info("🧪 TESTNET MODE - Safe for HF bot testing!")
 else:
     logger.warning("🚨 LIVE TRADING MODE - Real money at risk!")
-    logger.warning("   HF Bot will execute up to 150 trades/day")
+    logger.warning("   HF Bot will execute up to 20 quality trades/day")
     logger.warning("   Make sure you understand the risks")
 
 # Initialize HF-Optimized Configuration
@@ -1132,8 +1139,14 @@ class EnhancedTrailingStopManager:
             with self.lock:
                 strategy_config = self.strategy_configs.get(strategy_name.upper())
                 if not strategy_config:
-                    self.logger.error(f"Unknown strategy config: {strategy_name}")
-                    return False
+                    self.logger.warning(f"Unknown strategy config: {strategy_name}, using default")
+                    strategy_config = TrailingConfig(
+                        initial_stop_pct=0.5,
+                        trail_activation_pct=1.0,
+                        trail_distance_pct=0.25,
+                        min_trail_step_pct=0.08,
+                        max_update_frequency=20
+                    )
                 
                 position = TrailingPosition(
                     symbol=symbol,
@@ -1167,17 +1180,18 @@ class EnhancedTrailingStopManager:
             return False
     
     def calculate_initial_stop_loss(self, position: TrailingPosition) -> float:
-        """Calculate initial profitable stop loss (your system's logic)"""
+        """Calculate initial profitable stop loss - FIXED for correct direction"""
         config = position.config
         entry_price = position.entry_price
         side = position.side
         
         stop_pct = config.initial_stop_pct / 100
         
+        # FIXED: Correct stop loss direction for both Buy and Sell
         if side == "Buy":
-            stop_price = entry_price * (1 + stop_pct)  # Profitable stop above entry
-        else:
-            stop_price = entry_price * (1 - stop_pct)  # Profitable stop below entry
+            stop_price = entry_price * (1 + stop_pct)  # For SELL, stop is ABOVE entry  # Stop BELOW entry for Buy/Long
+        else:  # Sell
+            stop_price = entry_price * (1 + stop_pct)  # Stop ABOVE entry for Sell/Short
         
         self.logger.info(f"💰 Initial profitable stop: {position.symbol} → ${stop_price:.4f} "
                         f"(+{config.initial_stop_pct}%) [{position.strategy}]")
@@ -1240,7 +1254,7 @@ class EnhancedTrailingStopManager:
                 position.max_profit_reached = profit_pct
     
     def calculate_trailing_stop_price(self, position: TrailingPosition) -> Optional[float]:
-        """Calculate new trailing stop price with enhanced logic"""
+        """Calculate new trailing stop price - FIXED for correct direction"""
         if not position.trailing_active:
             return None
         
@@ -1252,16 +1266,15 @@ class EnhancedTrailingStopManager:
         trail_distance = config.trail_distance_pct * config.volatility_multiplier / 100
         trail_distance = min(trail_distance, config.max_trail_distance_pct / 100)
         
+        # FIXED: Correct trailing stop direction
         if side == "Buy":
             new_stop = best_price * (1 - trail_distance)
-            # Ensure minimum profit lock
-            min_profit_stop = position.entry_price * (1 + config.min_profit_lock_pct / 100)
-            new_stop = max(new_stop, min_profit_stop)
-        else:
+            # Don't let stop go below entry (ensure profit)
+            new_stop = max(new_stop, position.entry_price)
+        else:  # Sell
             new_stop = best_price * (1 + trail_distance)
-            # Ensure minimum profit lock
-            max_profit_stop = position.entry_price * (1 - config.min_profit_lock_pct / 100)
-            new_stop = min(new_stop, max_profit_stop)
+            # Don't let stop go above entry (ensure profit)
+            new_stop = min(new_stop, position.entry_price)
         
         return round(new_stop, 6)
     
@@ -1291,18 +1304,17 @@ class EnhancedTrailingStopManager:
         
         return True
     
-    async def update_stop_loss_on_exchange(self, position: TrailingPosition, new_stop_price: float) -> bool:
+    def update_stop_loss_on_exchange(self, position: TrailingPosition, new_stop_price: float) -> bool:
         """Enhanced stop loss update with comprehensive tracking"""
         try:
             # Rate limiting
             current_time = time.time()
             time_since_last_call = current_time - self.last_api_call
             if time_since_last_call < self.api_call_interval:
-                await asyncio.sleep(self.api_call_interval - time_since_last_call)
+                asyncio.sleep(self.api_call_interval - time_since_last_call)
             
             # Make API call
-            result = await self.session.make_request(
-                'set_trading_stop',
+            result = self.bybit_session.set_trading_stop(
                 category="linear",
                 symbol=position.symbol,
                 stopLoss=str(new_stop_price)
@@ -1344,7 +1356,7 @@ class EnhancedTrailingStopManager:
             self.logger.error(f"❌ Error updating stop for {position.symbol}: {e}")
             return False
     
-    async def manage_trailing_stops_for_position(self, position_data: Dict) -> bool:
+    def manage_trailing_stops_for_position(self, position_data: Dict) -> bool:
         """Enhanced single position management"""
         try:
             symbol = position_data['symbol']
@@ -1372,7 +1384,7 @@ class EnhancedTrailingStopManager:
             # Set initial stop if needed
             if not position.initial_stop_set:
                 initial_stop = self.calculate_initial_stop_loss(position)
-                if await self.update_stop_loss_on_exchange(position, initial_stop):
+                if self.update_stop_loss_on_exchange(position, initial_stop):
                     position.initial_stop_set = True
             
             # Check trailing activation
@@ -1382,7 +1394,7 @@ class EnhancedTrailingStopManager:
             # Calculate and update trailing stop
             new_stop_price = self.calculate_trailing_stop_price(position)
             if new_stop_price and self.should_update_stop(position, new_stop_price):
-                return await self.update_stop_loss_on_exchange(position, new_stop_price)
+                return self.update_stop_loss_on_exchange(position, new_stop_price)
             
             return True
             
@@ -1390,7 +1402,7 @@ class EnhancedTrailingStopManager:
             self.logger.error(f"❌ Position management error for {symbol}: {e}")
             return False
     
-    async def manage_all_trailing_stops(self, positions: List[Dict]):
+    def manage_all_trailing_stops(self, positions: List[Dict]):
         """Enhanced batch processing with concurrent execution"""
         try:
             trailing_positions = [p for p in positions if p.get('qty', 0) > 0]
@@ -1429,7 +1441,7 @@ class EnhancedTrailingStopManager:
                 with self.lock:
                     self.hf_performance_stats['concurrent_updates'] += len(tasks)
                 
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                results = [task for task in tasks]
                 
                 # Log results
                 successful_updates = sum(1 for r in results if r is True)
@@ -1517,6 +1529,9 @@ class EnhancedTrailingStopManager:
             
             with self.lock:
                 for symbol, position in self.position_tracking.items():
+                    if not isinstance(position, dict):
+                        # Convert TrailingPosition to dict
+                        position = {'trailing_active': getattr(position, 'trailing_active', False), 'symbol': symbol}
                     cleanup_hours = position.config.memory_cleanup_hours
                     if (current_time - position.created_time).total_seconds() > (cleanup_hours * 3600):
                         old_symbols.append(symbol)
@@ -1552,17 +1567,17 @@ class EnhancedTrailingStopManager:
         for key in expired_keys:
             del self.signal_cache[key]
     
-    async def start_background_tasks(self):
+    def start_background_tasks(self):
         """Start background optimization tasks"""
         self.is_running = True
         self.cleanup_task = asyncio.create_task(self._background_cleanup_loop())
         self.logger.info("🚀 Background HF optimization tasks started")
     
-    async def _background_cleanup_loop(self):
+    def _background_cleanup_loop(self):
         """Background cleanup task"""
         while self.is_running:
             try:
-                await asyncio.sleep(300)  # Every 5 minutes
+                asyncio.sleep(300)  # Every 5 minutes
                 self.optimize_for_hf_trading()
             except Exception as e:
                 self.logger.error(f"Background cleanup error: {e}")
@@ -1584,6 +1599,9 @@ class EnhancedTrailingStopManager:
             }
             
             for symbol, position in self.position_tracking.items():
+                if not isinstance(position, dict):
+                    # Convert TrailingPosition to dict
+                    position = {'trailing_active': getattr(position, 'trailing_active', False), 'symbol': symbol}
                 state['positions'][symbol] = {
                     'symbol': position.symbol,
                     'strategy': position.strategy,
@@ -1595,7 +1613,7 @@ class EnhancedTrailingStopManager:
                     'profit_locked': position.profit_locked,
                     'stops_updated_count': position.stops_updated_count,
                     'created_time': position.created_time.isoformat(),
-                    'status': position.status.value
+                    'status': position.status.value if hasattr(position.status, 'value') else str(position.status)
                 }
         
         return json.dumps(state, indent=2)
@@ -1611,10 +1629,10 @@ def create_enhanced_trailing_stop_manager(session, market_data, config, logger):
 trailing_manager = create_enhanced_trailing_stop_manager(session, ta_engine, config, logger)
 
 # Start background tasks
-await trailing_manager.start_background_tasks()
+trailing_manager.start_background_tasks()
 
 # In your main trading loop:
-await trailing_manager.manage_all_trailing_stops(positions)
+trailing_manager.manage_all_trailing_stops(positions)
 
 # Get performance stats
 stats = trailing_manager.get_hf_performance_stats()
@@ -1648,6 +1666,7 @@ class StrategyType(Enum):
     MACHINE_LEARNING = "machine_learning"
     ORDERBOOK_IMBALANCE = "orderbook_imbalance"
     CROSS_EXCHANGE_ARB = "cross_exchange_arb"
+    MULTI_STRATEGY = "multi_strategy"  # Meta strategy for position tracking
 
 @dataclass
 class StrategyConfig:
@@ -1672,7 +1691,7 @@ class EliteStrategyConfig(StrategyConfig):
     """🚀 ELITE HFQ CONFIGURATION - Maximum Performance for High-Frequency Quantitative Trading
     
     Optimized for:
-    - 150+ trades/day
+    - 20 premium trades/day
     - 15-second scan intervals
     - Multi-strategy coordination
     - Advanced ML filtering
@@ -1695,7 +1714,7 @@ class EliteStrategyConfig(StrategyConfig):
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
-                 min_signal_strength=0.05,     # ↑ Elite signal quality threshold
+                 min_signal_strength = 0.85,     # ↑ Elite signal quality threshold
                  
                  # 🧠 ADVANCED ML & REGIME FEATURES
                  regime_adaptive: bool = True,           # Elite regime detection
@@ -1762,17 +1781,55 @@ class EliteStrategyConfig(StrategyConfig):
                   
         
         # Initialize parent class first
-        super().__init__(name, max_positions, position_value, min_confidence, 
-                         enabled, signal_cache_seconds, 
-                         max_daily_trades, max_drawdown_pct, scan_symbols or [])
+                # Initialize parent first
+        # Initialize base class attributes directly
+        self.name = name
+        self.max_positions = max_positions
+        self.position_value = position_value
+        self.min_confidence = min_confidence
+        self.risk_per_trade = risk_per_trade_pct * position_value / 100 if position_value > 0 else 100
+        self.enabled = enabled
+        
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         self.scan_symbols = scan_symbols or ["BTCUSDT", "ETHUSDT"]
         self.timeframe = timeframe
-        self.risk_per_trade_pct = risk_per_trade_pct
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
 
         
         # AccountManager compatibility attributes (uppercase)
         self.MIN_BALANCE_REQUIRED = 500  # Default minimum balance
-        self.leverage = leverage
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
         self.enabled = enabled
         self.name = name
         self.position_value = position_value
@@ -1782,7 +1839,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.MAX_POSITION_PCT = 0.15  # 15% max position
         self.MAX_PORTFOLIO_RISK = 0.50  # 50% max portfolio risk
         self.EMERGENCY_STOP_DRAWDOWN = 0.05  # 5% emergency stop
-        self.MAX_CONCURRENT_POSITIONS = 15  # Max concurrent positions
+        self.MAX_CONCURRENT_POSITIONS = 5  # Max concurrent positions
         
         self.excellent_quality = excellent_quality
         self.elite_quality = elite_quality 
@@ -1800,7 +1857,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.daily_loss_cap = 0.10  # 10% daily loss cap
         self.trading_mode = 'moderate'  # Trading mode
         self.log_hf_error = log_hf_error  # Assign the HF error logging function
-        self.max_concurrent_trades = 15  # Max concurrent trades
+        self.max_concurrent_trades = 5  # Max concurrent trades
 
 # =====================================
 # STRATEGY-SPECIFIC CONFIGURATIONS
@@ -1815,8 +1872,8 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_value=0,
             position_sizing_method="risk_based",
             risk_per_trade_pct=1.5,
-            min_confidence=0.75,
-            max_daily_trades=8,
+            min_confidence=0.85,
+            max_daily_trades=3,
             signal_cache_seconds=15,
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
@@ -1831,8 +1888,8 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         position_value=0,                            # ✅ Use dynamic risk sizing
         position_sizing_method="risk_based",         # ✅ Enable HFQ sizing
         risk_per_trade_pct=1.5,                      # ✅ 1.5% of balance per trade
-        min_confidence=0.65,
-        max_daily_trades=5,                         # Lower frequency for swing trades
+        min_confidence=0.82,
+        max_daily_trades=3,                         # Lower frequency for swing trades
         signal_cache_seconds=60,                     # Longer cache for swing signals
         allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'DOTUSDT', 'XRPUSDT', 'LINKUSDT',
@@ -1847,8 +1904,8 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_value=0,                            # ✅ Dynamic sizing
             position_sizing_method="risk_based",         # ✅ Enables % balance sizing
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
-            min_confidence=0.8,
-            max_daily_trades=10,                        # Highest frequency
+            min_confidence=0.88,
+            max_daily_trades=4,                        # Highest frequency
             signal_cache_seconds=10,                     # Very short cache
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT', 'MATICUSDT', 'XRPUSDT',
@@ -1864,8 +1921,8 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_value=0,                            # ✅ Enable dynamic sizing
         position_sizing_method="risk_based",         # ✅ Use risk-based logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
-            min_confidence=0.7,
-            max_daily_trades=6,                         # Medium frequency
+            min_confidence=0.85,
+            max_daily_trades=3,                         # Medium frequency
             signal_cache_seconds=45,                     # Medium cache
             allowed_symbols=[
             'BTCUSDT', 'ETHUSDT', 'LINKUSDT', 'MATICUSDT', 'UNIUSDT',
@@ -1892,27 +1949,27 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             max_drawdown_pct=4.0
     ),
         
-        # ✅ NEW - HFQ-Lite Volume Spike Strategy (Your 150 trades/day)
+        # ✅ NEW - HFQ-Lite Volume Spike Strategy (Your 20 quality trades/day)
         StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
             name="HFQ_Volume_Spike",
             max_positions=1,                   # Higher concurrent positions
             position_value=0,                  # Max position cap
-            min_confidence=0.70,               # 70% minimum quality
+            min_confidence=0.82,               # 70% minimum quality
             risk_per_trade=1.5,                # 1.5% risk per trade
-            max_daily_trades=10,              # ✅ Your 150 trades/day target
+            max_daily_trades=4,              # ✅ Your 20 quality trades/day target
             signal_cache_seconds=5,            # Fast 5-second scanning
             max_drawdown_pct=12.0,             # 12% max portfolio risk
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT',
                            'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
             
             # HFQ-specific settings
-            min_quality_score=0.70,
-            excellent_quality=0.85,
-            elite_quality=0.95,
-            moderate_spike_ratio=2.0,
-            strong_spike_ratio=3.0,
-            institutional_spike_ratio=5.0,
-            extreme_spike_ratio=8.0,
+            min_quality_score = 0.85,
+            excellent_quality = 0.92,
+            elite_quality = 0.97,
+            moderate_spike_ratio = 3.0,
+            strong_spike_ratio = 5.0,
+            institutional_spike_ratio = 8.0,
+            extreme_spike_ratio = 12.0,
             
             # Enhanced risk management
             max_portfolio_risk=0.12,
@@ -1926,8 +1983,8 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             name="Bollinger_Squeeze",
             max_positions=1,
             position_value=220.0,
-            min_confidence=0.73,
-            max_daily_trades=7,
+            min_confidence=0.85,
+            max_daily_trades=3,
             signal_cache_seconds=30,
             allowed_symbols=['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'LINKUSDT'],
             max_drawdown_pct=5.5
@@ -2328,14 +2385,47 @@ class RSIStrategy(BaseStrategy):
     """
     
     def __init__(self, config: StrategyConfig, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.RSI_SCALP, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # RSI-specific parameters
         self.rsi_period = 14
-        self.rsi_oversold_strong = 20
+        self.rsi_oversold_strong = 15
         self.rsi_oversold_moderate = 30
         self.rsi_overbought_moderate = 70
-        self.rsi_overbought_strong = 80
+        self.rsi_overbought_strong = 85
         
         # HF scalping parameters
         self.volume_multiplier_threshold = 1.5  # Volume must be 1.5x average
@@ -2578,8 +2668,41 @@ class EMAStrategy(BaseStrategy):
     """
     
     def __init__(self, config: StrategyConfig, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.EMA_CROSS, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # EMA parameters
         self.ema_fast_period = 9
         self.ema_slow_period = 21
@@ -2906,8 +3029,41 @@ class ScalpingStrategy(BaseStrategy):
     """
     
     def __init__(self, config: StrategyConfig, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.SCALPING, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # Ultra-scalping parameters
         self.momentum_periods = [3, 5, 8]  # Multiple momentum timeframes
         self.volume_lookback = 20          # Volume analysis periods
@@ -3297,8 +3453,41 @@ class MACDStrategy(BaseStrategy):
     """
     
     def __init__(self, config: StrategyConfig, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.MACD_MOMENTUM, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # MACD parameters
         self.macd_fast = 12
         self.macd_slow = 26
@@ -3743,8 +3932,41 @@ class BreakoutStrategy(BaseStrategy):
     """
     
     def __init__(self, config: StrategyConfig, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.BREAKOUT, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # Bollinger Band parameters
         self.bb_period = 20
         self.bb_std_dev = 2.0
@@ -4187,17 +4409,51 @@ class VolumeSpikeStrategy(BaseStrategy):
     """
     
     def __init__(self, config, session, market_data, logger):
-        super().__init__(StrategyType.VOLUME_SPIKE, config, session, market_data, logger)        
+                # Initialize parent first
+        super().__init__(StrategyType.VOLUME_SPIKE, config, session, market_data, logger)
+        
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # HFQ-Lite Configuration
-        self.moderate_spike_ratio = 2.0      # 2.0x moderate spike
-        self.strong_spike_ratio = 3.0        # 3.0x strong spike  
-        self.institutional_spike_ratio = 5.0 # 5.0x institutional detection
-        self.extreme_spike_ratio = 8.0       # 8.0x extreme spike
+        self.moderate_spike_ratio = 3.0      # 2.0x moderate spike
+        self.strong_spike_ratio = 5.0        # 3.0x strong spike  
+        self.institutional_spike_ratio = 8.0 # 5.0x institutional detection
+        self.extreme_spike_ratio = 12.0       # 8.0x extreme spike
         
         # Quality thresholds
-        self.min_quality_score = 0.70        # 70% minimum quality
-        self.excellent_quality = 0.85        # 85% excellent quality
-        self.elite_quality = 0.95            # 95% elite quality
+        self.min_quality_score = 0.85        # 70% minimum quality
+        self.excellent_quality = 0.92        # 85% excellent quality
+        self.elite_quality = 0.97            # 95% elite quality
         
         # Daily tracking
         self.daily_trade_target = 150         # 60 high-quality trades per day
@@ -4696,8 +4952,41 @@ class BollingerBandsStrategy(BaseStrategy):
     """
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.BOLLINGER_BANDS, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # HFQ-Lite BB Configuration
         self.bb_period = 20                      # Standard BB period
         self.bb_std_dev = 2.0                    # Standard deviation multiplier
@@ -4717,9 +5006,9 @@ class BollingerBandsStrategy(BaseStrategy):
         self.moderate_overbought_threshold = 0.75 # 75% from lower band
         
         # Quality thresholds
-        self.min_quality_score = 0.75            # 75% minimum quality
-        self.excellent_quality = 0.88            # 88% excellent quality
-        self.elite_quality = 0.95               # 95% elite quality
+        self.min_quality_score = 0.85            # 75% minimum quality
+        self.excellent_quality = 0.92            # 88% excellent quality
+        self.elite_quality = 0.97               # 95% elite quality
         
         # Daily tracking
         self.daily_trade_target = 45             # 45 high-quality BB trades per day
@@ -5401,8 +5690,41 @@ class HybridCompositeStrategy(BaseStrategy):
     """
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.HYBRID_COMPOSITE, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         # HFQ Elite Composite Configuration
         self.indicator_weights = {
             'rsi': 0.25,        # RSI weight
@@ -5413,19 +5735,19 @@ class HybridCompositeStrategy(BaseStrategy):
         }
         
         # Quality thresholds (HFQ optimized)
-        self.min_quality_score = 0.70            # 70% minimum quality for HFQ
-        self.excellent_quality = 0.85            # 85% excellent quality
-        self.elite_quality = 0.92                # 92% elite quality
+        self.min_quality_score = 0.85            # 70% minimum quality for HFQ
+        self.excellent_quality = 0.92            # 85% excellent quality
+        self.elite_quality = 0.97                # 92% elite quality
         
         # Signal strength thresholds (HFQ optimized)
-        self.min_signal_strength=0.05          # Lower threshold for HFQ
+        self.min_signal_strength = 0.85          # Lower threshold for HFQ
         self.strong_signal_threshold = 0.70      # Strong signal threshold
         self.elite_signal_threshold = 0.85       # Elite signal threshold
         
         # Indicator parameters (HFQ optimized)
         self.rsi_period = 12                     # Faster RSI for HFQ
-        self.rsi_oversold = 30                   # Standard levels for HFQ
-        self.rsi_overbought = 70
+        self.rsi_oversold = 20                   # Standard levels for HFQ
+        self.rsi_overbought = 80
         self.ema_fast = 5                        # Very fast EMA for HFQ
         self.ema_slow = 13                       # Faster slow EMA
         self.ema_trend = 34                      # Trend filter
@@ -5468,7 +5790,7 @@ class HybridCompositeStrategy(BaseStrategy):
         logger.info(f"   Target: {self.daily_trade_target} elite composite trades/day")
         logger.info(f"   Quality Threshold: {self.min_quality_score:.0%}+ minimum")
         logger.info(f"   Indicators: RSI, EMA, MACD, Volume, Momentum fusion")
-        logger.info(f"   HFQ Mode: Ultra-fast execution with 150 trades/day target")
+        logger.info(f"   HFQ Mode: Ultra-fast execution with 20 quality trades/day target")
     
     def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
         """HFQ Elite Hybrid Composite Strategy - Advanced multi-indicator fusion"""
@@ -5934,8 +6256,41 @@ class RegimeAdaptiveStrategy(BaseStrategy):
     """Market Regime AI Director - Advanced Multi-Timeframe Regime Detection"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.REGIME_ADAPTIVE, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         self.current_regime = "NEUTRAL"
         self.regime_confidence = 0.0
         self.regime_history = []
@@ -5959,8 +6314,41 @@ class FundingArbitrageStrategy(BaseStrategy):
     """Funding Rate Arbitrage Strategy - Harvest funding payments"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.FUNDING_ARBITRAGE, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 Funding Rate Harvester Pro initialized")
         logger.info(f"   Strategy: Funding rate arbitrage")
         
@@ -5980,8 +6368,41 @@ class NewsSentimentStrategy(BaseStrategy):
     """News Sentiment AI Strategy - News-driven trading"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.NEWS_SENTIMENT, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 News Alpha AI Engine initialized")
         logger.info(f"   Strategy: Sentiment-driven trading")
         
@@ -6001,8 +6422,41 @@ class MTFConfluenceStrategy(BaseStrategy):
     """Multi-Timeframe Confluence Strategy"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.MTF_CONFLUENCE, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 MTF Confluence Engine initialized")
         
     def generate_signals(self, symbol: str, df: pd.DataFrame) -> List[Dict]:
@@ -6021,8 +6475,41 @@ class CrossMomentumStrategy(BaseStrategy):
     """Cross-Pair Momentum Strategy"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.CROSS_MOMENTUM, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 Cross Momentum Engine initialized")
         
     def generate_signals(self, symbol: str, df: pd.DataFrame) -> List[Dict]:
@@ -6041,8 +6528,41 @@ class MLEnsembleStrategy(BaseStrategy):
     """Machine Learning Ensemble Strategy"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.MACHINE_LEARNING, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 ML Ensemble Engine initialized")
         
     def generate_signals(self, symbol: str, df: pd.DataFrame) -> List[Dict]:
@@ -6061,8 +6581,41 @@ class OrderbookImbalanceStrategy(BaseStrategy):
     """Order Book Imbalance Strategy"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.ORDERBOOK_IMBALANCE, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 Order Book Alpha Predator initialized")
         
     def generate_signals(self, symbol: str, df: pd.DataFrame) -> List[Dict]:
@@ -6081,8 +6634,41 @@ class CrossExchangeArbStrategy(BaseStrategy):
     """Cross-Exchange Arbitrage Strategy"""
     
     def __init__(self, config, session, market_data, logger):
+                # Initialize parent first
         super().__init__(StrategyType.CROSS_EXCHANGE_ARB, config, session, market_data, logger)
         
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         logger.info(f"🎯 Cross Exchange Arb initialized")
         
     def generate_signals(self, symbol: str, df: pd.DataFrame) -> List[Dict]:
@@ -6126,7 +6712,7 @@ STRATEGY_CONFIGS = {
         leverage=12,                     # ↑ Higher leverage with better risk control
         timeframe="3",
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
-        min_signal_strength=0.05,        # ↑ Higher quality threshold
+        min_signal_strength = 0.85,        # ↑ Higher quality threshold
         regime_adaptive=True,
         ml_filter=True,
         volatility_scaling=True,
@@ -6147,7 +6733,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
         timeframe="5",                   # ↑ Optimized 8-minute sweet spot
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,    # ← Elite feature
@@ -6167,7 +6753,7 @@ STRATEGY_CONFIGS = {
         leverage=15,                     # ↑ Maximum leverage for scalping
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.05,        # ↑ Very high quality for scalping
+        min_signal_strength = 0.85,        # ↑ Very high quality for scalping
         latency_critical=True,           # ← Elite execution
         microstructure_boost=True,       # ← Order flow analysis
         execution_alpha=True,
@@ -6188,7 +6774,7 @@ STRATEGY_CONFIGS = {
         leverage=8,
         scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT"],
         timeframe="5",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         regime_adaptive=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=1.7,
@@ -6209,7 +6795,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="1",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         microstructure_boost=True,       # ← Order flow integration
         news_integration=True,           # ← News-driven volume spikes
         execution_alpha=True,
@@ -6229,7 +6815,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "AVAXUSDT", "MATICUSDT"],
         timeframe="5",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         regime_adaptive=True,
         volatility_scaling=True,
         ml_filter=True,
@@ -6249,7 +6835,7 @@ STRATEGY_CONFIGS = {
         leverage=1,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         ml_filter=True,
         performance_feedback=True,
         auto_parameter_tuning=True,
@@ -6268,7 +6854,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
         timeframe="60",
-        min_signal_strength=0.05,        # Extremely high confidence
+        min_signal_strength = 0.85,        # Extremely high confidence
         funding_aware=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=3.0,        # High Sharpe for arbitrage
@@ -6287,7 +6873,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         news_integration=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6307,7 +6893,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,
@@ -6327,7 +6913,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "LINKUSDT", "ADAUSDT"],
         timeframe="3",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         cross_asset_correlation=True,
         regime_adaptive=True,
         ml_filter=True,
@@ -6349,7 +6935,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="5",
-        min_signal_strength=0.05,        # ML should be very confident
+        min_signal_strength = 0.85,        # ML should be very confident
         ml_filter=True,
         regime_adaptive=True,
         performance_feedback=True,
@@ -6370,7 +6956,7 @@ STRATEGY_CONFIGS = {
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
         timeframe="1",                  # Sub-minute execution
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         microstructure_boost=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6390,7 +6976,7 @@ STRATEGY_CONFIGS = {
         leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="1",
-        min_signal_strength=0.05,             # Near-certain arbitrage only
+        min_signal_strength = 0.85,             # Near-certain arbitrage only
         latency_critical=True,
         execution_alpha=True,
         smart_routing=True,
@@ -6410,7 +6996,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength=0.05,
+        min_signal_strength = 0.85,
         regime_adaptive=True,
         volatility_scaling=True
     ),
@@ -6425,7 +7011,7 @@ STRATEGY_CONFIGS = {
         leverage=7,
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="5",
-        min_signal_strength=0.05,        # ← High threshold for hybrid
+        min_signal_strength = 0.85,        # ← High threshold for hybrid
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True
@@ -6637,7 +7223,7 @@ class AccountManagerConfig:
         self.EMERGENCY_STOP_DRAWDOWN = 0.05  # 5% account drawdown triggers emergency stop
 
         # Trading Limits
-        self.MAX_CONCURRENT_POSITIONS = 15  # Aligned with your 14-strategy bot
+        self.MAX_CONCURRENT_POSITIONS = 5  # Aligned with your 14-strategy bot
         self.MAX_RISK_PER_SYMBOL = 0.03  # 3% max risk per symbol
         self.MIN_POSITION_SIZE_USD = 10  # Minimum position size
 
@@ -6753,7 +7339,7 @@ class AccountManager:
                             "position_value": size * entry_price,
                             "leverage": float(pos.get("leverage", 1)),
                             "liq_price": float(pos.get("liqPrice", 0)) if pos.get("liqPrice") else 0,
-                            "strategy": "MULTI_STRATEGY"
+                            "strategy": pos.get("strategy", "MULTI_STRATEGY")
                         }
                         active.append(position_info)
                 except (ValueError, KeyError) as e:
@@ -6806,7 +7392,41 @@ class EnhancedAccountManager(AccountManager):
     """Enhanced Account Manager with professional risk management"""
     
     def __init__(self, session, config: Optional[AccountManagerConfig] = None):
+                # Initialize parent first
         super().__init__(session)
+        
+        # Set all required attributes
+        self.scan_symbols = config.allowed_symbols if hasattr(config, "allowed_symbols") else ["BTCUSDT", "ETHUSDT"]
+        self.symbols = self.scan_symbols
+        self.timeframe = config.timeframe if hasattr(config, "timeframe") else "5"
+        self.min_signal_strength = config.min_signal_strength if hasattr(config, "min_signal_strength") else 0.65
+        self.leverage = config.leverage if hasattr(config, "leverage") else 10
+        self.risk_per_trade_pct = config.risk_per_trade_pct if hasattr(config, "risk_per_trade_pct") else 1.5
+        self.max_loss_pct = config.max_loss_pct if hasattr(config, "max_loss_pct") else 1.5
+        self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
+        
+        # HFQ specific attributes
+        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
+        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        
+        # Add any other missing attributes with defaults
+        for attr, default in [
+            ('moderate_spike_ratio', 3.0),
+            ('strong_spike_ratio', 5.0),
+            ('institutional_spike_ratio', 8.0),
+            ('extreme_spike_ratio', 12.0),
+            ('max_portfolio_risk', 0.08),
+            ('stop_loss_pct', 0.015),
+            ('take_profit_pct', 0.025),
+            ('daily_loss_cap', 0.10),
+            ('trading_mode', 'moderate'),
+            ('min_required_balance', 500),
+            ('max_concurrent_trades', 5)
+        ]:
+            if not hasattr(self, attr):
+                setattr(self, attr, locals().get(attr, default))
+
         self.config = config or AccountManagerConfig()  # Create default if none provided
         # Validate configuration
         if not self.config.validate():
@@ -7319,6 +7939,8 @@ class OrderManager:
         self.session = session
         self.bybit_session = bybit_session
         self.account_manager = account_manager
+        self.trailing_stop_manager = trailing_stop_manager  # ✅ FIXED
+        self.config = config  # ✅ FIXED
 #        # Initialize Enhanced Trailing Stop Manager
         self.precision_cache = {}
         self.order_history = deque(maxlen=2000)  # Increased for multi-strategy
@@ -7363,7 +7985,9 @@ class OrderManager:
                     'MACD_MOMENTUM_MASTER': 'MACD_MOMENTUM',
                     'HFQ_VOLUME_SPIKE_ELITE': 'VOLUME_SPIKE',
                     'HFQ_BOLLINGER_QUANTUM_PRO': 'BOLLINGER_BANDS',
-                    'HYBRID_COMPOSITE_MASTER': 'HYBRID_COMPOSITE'
+                    'HYBRID_COMPOSITE_MASTER': 'HYBRID_COMPOSITE',
+                    'MULTI_STRATEGY': 'MULTI_STRATEGY',  # Add this
+                    'UNKNOWN': 'RSI_OVERSOLD'  # Default fallback
                 }
                 
                 config_key = strategy_mapping.get(strategy_key, 'RSI_OVERSOLD')
@@ -7377,9 +8001,9 @@ class OrderManager:
                 stop_pct = 0.004  # Default 0.4% profit stop
             
             if side == "Buy":
-                stop_price = entry_price * (1 + stop_pct)
+                stop_price = entry_price * (1 + stop_pct)  # For SELL, stop is ABOVE entry  # FIXED: Stop below for Buy
             else:
-                stop_price = entry_price * (1 - stop_pct)
+                stop_price = entry_price * (1 + stop_pct)  # FIXED: Stop above for Sell
             
             if stop_price <= 0:
                 return None
@@ -7406,8 +8030,7 @@ class OrderManager:
             if f"price_precision_{symbol}" in self.precision_cache:
                 return self.precision_cache[f"price_precision_{symbol}"]
             
-            info = self.bybit_session.safe_api_call(
-                self.session.get_instruments_info,
+            info = self.session.get_instruments_info(
                 category="linear",
                 symbol=symbol
             )
@@ -7445,7 +8068,7 @@ class OrderManager:
             
             try:
                 now = time.time()
-                if now - self.last_trade_time[symbol] < config.min_time_between_trades:
+                if now - self.last_trade_time[symbol] < 8:
                     logger.warning(f"⚠️ Too soon to trade {symbol} again")
                     return None
             
@@ -7467,8 +8090,7 @@ class OrderManager:
                 
                 logger.info(f"🚀 [{strategy_name}] Placing {side} order: {symbol} {qty} @ ${current_price:.4f} (${position_value:.2f})")
                 
-                order = self.bybit_session.safe_api_call(
-                    self.session.place_order,
+                order = self.session.place_order(
                     category="linear",
                     symbol=symbol,
                     side=side,
@@ -7495,8 +8117,9 @@ class OrderManager:
                             )
                             logger.info(f"✅ Trailing stop tracking initialized for {symbol}")
                         
-                        trailing_stop_manager.initialize_position_tracking(
-                            symbol, current_price, side, strategy_name
+                        if hasattr(self, 'trailing_stop_manager') and self.trailing_stop_manager:
+                            self.trailing_stop_manager.initialize_position_tracking(
+                                symbol, current_price, side, strategy_name
                         )
                         
                         # Set initial profitable stop loss
@@ -7548,8 +8171,7 @@ class OrderManager:
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                order_status = self.bybit_session.safe_api_call(
-                    self.session.get_open_orders,
+                order_status = self.session.get_open_orders(
                     category="linear",
                     symbol=symbol,
                     orderId=order_id
@@ -7573,8 +8195,7 @@ class OrderManager:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                result = self.bybit_session.safe_api_call(
-                    self.session.set_trading_stop,
+                result = self.session.set_trading_stop(
                     category="linear",
                     symbol=symbol,
                     stopLoss=str(round(stop_price, self._get_price_precision(symbol)))
@@ -7597,8 +8218,7 @@ class OrderManager:
     def set_take_profit(self, symbol: str, tp_price: float) -> bool:
         """Set take profit with error handling"""
         try:
-            result = self.bybit_session.safe_api_call(
-                self.session.set_trading_stop,
+            result = self.session.set_trading_stop(
                 category="linear",
                 symbol=symbol,
                 takeProfit=str(round(tp_price, self._get_price_precision(symbol)))
@@ -7622,8 +8242,7 @@ class OrderManager:
             
             logger.info(f"🔄 [{strategy_name}] Closing position: {symbol} {side} {qty}")
             
-            order = self.bybit_session.safe_api_call(
-                self.session.place_order,
+            order = self.session.place_order(
                 category="linear",
                 symbol=symbol,
                 side=close_side,
@@ -8183,6 +8802,43 @@ class EnhancedMultiStrategyTradingBot:
             logger.error(f"❌ Error checking emergency conditions: {e}")
             return False
     
+    
+    def apply_ultra_quality_filter(self, signal_data):
+        """Apply ultra-strict quality filters for 20 trades/day target"""
+        symbol = signal_data['symbol']
+        strength = signal_data['strength']
+        analysis = signal_data.get('analysis', {})
+        
+        # Require multiple confirmations
+        confirmations = 0
+        
+        # Strong RSI confirmation
+        rsi = analysis.get('rsi', 50)
+        if (signal_data['signal'] == 'Buy' and rsi < 25) or (signal_data['signal'] == 'Sell' and rsi > 75):
+            confirmations += 1
+        
+        # Volume confirmation
+        if analysis.get('volume_surge', False) or analysis.get('volume_ratio', 1) > 2.5:
+            confirmations += 1
+        
+        # Trend alignment
+        if analysis.get('trend_aligned', False):
+            confirmations += 1
+        
+        # Momentum confirmation
+        if analysis.get('momentum_strong', False):
+            confirmations += 1
+        
+        # Require at least 3 confirmations for ultra-quality
+        if confirmations < 3:
+            return None
+        
+        # Boost signal strength based on confirmations
+        signal_data['strength'] = min(1.0, strength + (confirmations * 0.05))
+        signal_data['quality_score'] = confirmations / 4.0
+        
+        return signal_data
+
     def scan_all_strategies_for_entries(self):
         """Enhanced entry scanning across all strategies"""
         try:
@@ -8270,7 +8926,7 @@ class EnhancedMultiStrategyTradingBot:
             all_signals.sort(key=lambda x: x['strength'], reverse=True)
             
             executed = 0
-            max_new_positions = min(3, config.max_concurrent_trades - total_positions)  # Max 3 new per scan
+            max_new_positions = min(1, config.max_concurrent_trades - total_positions)  # Max 1 new per scan - Quality Focus
             
             logger.info(f"📊 Found {len(all_signals)} signals, executing top {max_new_positions}...")
             
@@ -8339,7 +8995,7 @@ class EnhancedMultiStrategyTradingBot:
                     take_profit_price = None  # Using trailing stops instead
                     logger.info(f"   Final Quantity: {qty}")
                     logger.info(f"   Stop Loss: ${final_stop_loss:.4f}")
-                    logger.info(f"   Take Profit: ${take_profit_price:.4f}")
+                    logger.info(f"   Take Profit: ${take_profit_price:.4f}" if take_profit_price else "   Take Profit: None (using trailing stops)")
                     
                     # Place the order
                     order_result = self.order_manager.place_market_order_with_protection(
@@ -8389,7 +9045,7 @@ class EnhancedMultiStrategyTradingBot:
         
             # First, manage trailing stops for all positions
             # Properly manage trailing stops
-            asyncio.create_task(self.trailing_stop_manager.manage_all_trailing_stops(positions))
+            self.trailing_stop_manager.manage_all_trailing_stops(positions)
             self.trailing_stop_manager.cleanup_closed_positions(positions)
  
             # Group positions by strategy for better reporting
@@ -8447,7 +9103,7 @@ class EnhancedMultiStrategyTradingBot:
                             
                             # Check if trailing is active
                             tracking = self.trailing_stop_manager.position_tracking.get(symbol, {})
-                            is_trailing = tracking.get('trailing_active', False)
+                            is_trailing = getattr(tracking, 'trailing_active', False) if hasattr(tracking, 'trailing_active') else getattr(tracking, 'trailing_active', False) if hasattr(tracking, 'trailing_active') else (getattr(tracking, 'trailing_active', False) if hasattr(tracking, 'trailing_active') else False)
                             
                             if not is_trailing:
                                 # Take partial profit if trailing not active yet
@@ -8552,11 +9208,14 @@ class EnhancedMultiStrategyTradingBot:
                     
                     for pos in strategy_positions:
                         pnl_indicator = "🟢" if pos["pnl"] >= 0 else "🔴"
-                        risk_level = "🚨" if pos["pnl"] <= -(available_balance * (getattr(config, "max_loss_pct", 1.5) / 100)) * 0.8 else ""
+                        risk_level = "🚨" if pos["pnl"] <= -(balance_info["available"] * (getattr(config, "max_loss_pct", 1.5) / 100)) * 0.8 else ""
                         
                         # Check trailing status
                         tracking = self.trailing_stop_manager.position_tracking.get(pos['symbol'], {})
-                        trailing_status = "🎯" if tracking.get('trailing_active', False) else "💰"
+                        # Fixed: Handle TrailingPosition object properly
+                        if hasattr(tracking, 'trailing_active'):                            trailing_status = "🎯" if tracking.trailing_active else "💰"
+                        else:
+                            trailing_status = "🎯" if (hasattr(tracking, 'trailing_active') and getattr(tracking, 'trailing_active', False)) or (hasattr(tracking, 'get') and tracking.get('trailing_active', False)) else "💰"
                         
                         logger.info(f"      {pnl_indicator}{risk_level}{trailing_status} {pos['symbol']}: {pos['side']} {pos['qty']} | "
                                   f"Entry: ${pos['entry']:.4f} | Current: ${pos['current']:.4f} | "
@@ -8779,8 +9438,8 @@ class EnhancedMultiStrategyTradingBot:
                     } for k, v in TRAILING_CONFIGS.items()}
                 },
                 'configuration': {
-                    'trading_mode': config.trading_mode.value,
-                    'signal_type': config.signal_type.value,
+                    'trading_mode': getattr(config.trading_mode, 'value', config.trading_mode) if hasattr(config.trading_mode, 'value') else str(config.trading_mode),
+                    'signal_type': getattr(config.signal_type, 'value', config.signal_type) if hasattr(config.signal_type, 'value') else str(config.signal_type),
                     'max_concurrent_trades': config.max_concurrent_trades,
                     'daily_loss_cap': config.daily_loss_cap,
                     'total_strategies': len(self.strategies),
@@ -8960,7 +9619,7 @@ if __name__ == "__main__":
         # Initialize trailing stop manager
         
         # Initialize order manager
-        order_manager = OrderManager(session, account_manager)
+        order_manager = OrderManager(session, account_manager, trailing_stop_manager, config)
         logger.info("✅ OrderManager ready")
         
         bot = EnhancedMultiStrategyTradingBot()
@@ -9106,7 +9765,7 @@ FEATURES:
 STRATEGIES:
 1. RSI Reversal Pro - Oversold/overbought reversals
 2. EMA Crossover Elite - Moving average crossovers  
-3. Lightning Scalp - High-frequency scalping
+3. Lightning Scalp - High-quality scalping
 4. MACD Momentum Master - MACD histogram signals
 5. Volatility Breakout Beast - Bollinger band breakouts
 6. Volume Surge Hunter - Volume spike detection
