@@ -167,7 +167,7 @@ class TrailingConfig:
 class TradingConfig:
     # Position Management - HF BOT OPTIMIZED
     max_position_value: float = 1200                 # ~$1200 max position (21% of balance)
-    max_concurrent_trades: int = 15                  # 8 concurrent positions
+    max_concurrent_trades: int = 4                  # ✅ Focus on quality# 8 concurrent positions
 # #     profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
     trail_lock_usd: float = 30                       # Lock $30 profit when trailing
     max_loss_per_trade: float = 86                   # $86 max loss (1.5% of $5,739)
@@ -193,7 +193,7 @@ class TradingConfig:
     # HIGH-FREQUENCY TRADING LOGIC
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
-    scan_interval: int = 15                          # ✅ 15 seconds
+    scan_interval: int = 45                          # ✅ Quality scanning
     min_signal_strength = 0.85                # Higher quality for fees
     
     # Symbols and Markets
@@ -209,8 +209,8 @@ class TradingConfig:
     
     # HIGH-FREQUENCY SAFETY
     max_consecutive_losses: int = 8                  # Higher - more trades expected
-    daily_trade_limit: int = 25                     # ✅ 150 trades target
-    min_time_between_trades: int = 8                 # Faster - bot can handle it
+    daily_trade_limit: int = 20                     # ✅ Quality over quantity# ✅ 150 trades target
+    min_time_between_trades: int = 300                 # ✅ 5 min spacing# Faster - bot can handle it
     max_trades_per_minute: int = 6                   # Rate limiting
     api_rate_limit_buffer: float = 0.8               # Use 80% of API limits
     
@@ -225,20 +225,7 @@ class TradingConfig:
     def __post_init__(self):
         if not self.symbols:
             # TOP 12 MOST LIQUID PAIRS - Optimized for HF bot
-            self.symbols = [
-                "BTCUSDT",   # Highest liquidity
-                "ETHUSDT",   # Second highest
-                "SOLUSDT",   # High volume, good for scalping
-                "BNBUSDT",   # Stable liquidity
-                "XRPUSDT",   # High volume
-                "ADAUSDT",   # Good liquidity
-                "DOGEUSDT",  # High retail volume
-                "AVAXUSDT",  # Good for breakouts
-                "LINKUSDT",  # Steady movements
-                "MATICUSDT", # Good scalping target
-                "DOTUSDT",   # Decent liquidity
-                "ATOMUSDT"   # Good for momentum
-            ]
+            self.symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
         
         if not self.timeframes:
             # OPTIMIZED FOR HIGH-FREQUENCY
@@ -329,7 +316,7 @@ class TradingConfig:
 # HIGH-FREQUENCY TRAILING STOP CONFIGURATIONS
 TRAILING_CONFIGS = {
     'RSI_OVERSOLD': TrailingConfig(
-        initial_stop_pct=0.4,                        # Tighter for HF
+        initial_stop_pct=0.6,                        # ✅ Better profit lock                        # Tighter for HF
         trail_activation_pct=0.8,                    # Start trailing sooner
         trail_distance_pct=0.2,                     # Closer trailing
         min_trail_step_pct=0.06,                    # Smaller steps
@@ -1897,7 +1884,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
     return {
     StrategyType.RSI_SCALP: StrategyConfig(
             name="RSI_Scalp_Fast",
-            max_positions=3,
+            max_positions=1,
             position_value=0,
             position_sizing_method="risk_based",
             risk_per_trade_pct=1.5,
@@ -1913,7 +1900,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         
         StrategyType.EMA_CROSS: StrategyConfig(
         name="EMA_Cross_Swing",
-        max_positions=2,
+        max_positions=1,
         position_value=0,                            # ✅ Use dynamic risk sizing
         position_sizing_method="risk_based",         # ✅ Enable HFQ sizing
         risk_per_trade_pct=1.5,                      # ✅ 1.5% of balance per trade
@@ -1929,7 +1916,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
 
         StrategyType.SCALPING: StrategyConfig(
         name="Ultra_Scalp",
-            max_positions=4,
+            max_positions=1,
             position_value=0,                            # ✅ Dynamic sizing
             position_sizing_method="risk_based",         # ✅ Enables % balance sizing
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
@@ -1946,7 +1933,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         
     StrategyType.MACD_MOMENTUM: StrategyConfig(
             name="MACD_Momentum",
-            max_positions=2,
+            max_positions=1,
             position_value=0,                            # ✅ Enable dynamic sizing
         position_sizing_method="risk_based",         # ✅ Use risk-based logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
@@ -1964,7 +1951,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
         # ✅ FIXED - Added the missing RSI_OVERSOLD strategy
     StrategyType.RSI_OVERSOLD: StrategyConfig(
             name="RSI_Oversold_Recovery",
-            max_positions=3,
+            max_positions=1,
             position_value=0,                            # ✅ Enable dynamic sizing
             position_sizing_method="risk_based",         # ✅ Risk-based sizing logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% risk per trade
@@ -6814,7 +6801,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.VOLUME_SPIKE: EliteStrategyConfig(
         name="HFQ Volume Spike Elite",
-        enabled=True,                    # ← ENABLED (was disabled)
+        enabled=False,                    # ← ENABLED (was disabled)
         max_positions=1,                 # ↑ More positions for volume opportunities
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6834,7 +6821,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.BOLLINGER_BANDS: EliteStrategyConfig(
         name="HFQ Bollinger Quantum Pro",
-        enabled=True,                    # ← ENABLED (was disabled)
+        enabled=False,                    # ← ENABLED (was disabled)
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6856,7 +6843,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.REGIME_ADAPTIVE: EliteStrategyConfig(
         name="Market Regime AI Director",
-        enabled=True,
+        enabled=False,
         max_positions=0,                 # Overlay strategy - adjusts others
         position_value=0,
 #         profit_target_pct=0,
@@ -6873,7 +6860,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.FUNDING_ARBITRAGE: EliteStrategyConfig(
         name="Funding Rate Harvester Pro",
-        enabled=True,
+        enabled=False,
         max_positions=1,                 # Dedicated positions for funding
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6892,7 +6879,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.NEWS_SENTIMENT: EliteStrategyConfig(
         name="News Alpha AI Engine",
-        enabled=True,
+        enabled=False,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6912,7 +6899,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MTF_CONFLUENCE: EliteStrategyConfig(
         name="Multi-Timeframe Confluence AI",
-        enabled=True,
+        enabled=False,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ ADD this
@@ -6932,7 +6919,7 @@ STRATEGY_CONFIGS = {
   
     StrategyType.CROSS_MOMENTUM: EliteStrategyConfig(
         name="Cross-Asset Momentum AI",
-        enabled=True,
+        enabled=False,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6954,7 +6941,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.MACHINE_LEARNING: EliteStrategyConfig(
         name="ML Ensemble Alpha Engine",
-        enabled=True,
+        enabled=False,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6975,7 +6962,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.ORDERBOOK_IMBALANCE: EliteStrategyConfig(
         name="Order Book Alpha Predator",
-        enabled=True,                    # Enable for elite performance
+        enabled=False,                    # Enable for elite performance
         max_positions=1,                 # High frequency opportunities
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -6995,7 +6982,7 @@ STRATEGY_CONFIGS = {
     
     StrategyType.CROSS_EXCHANGE_ARB: EliteStrategyConfig(
         name="Cross-Exchange Arbitrage Master",
-        enabled=True,
+        enabled=False,
         max_positions=1,
         position_value=0,
         position_sizing_method="risk_based",  # ✅ YES
@@ -8774,7 +8761,7 @@ class EnhancedMultiStrategyTradingBot:
             # Adjust requirements based on time
             if current_hour in prime_hours:
                 # Best hours - accept good signals
-                min_strength = 0.65
+                min_strength = 0.75
                 time_quality = "PRIME"
             elif current_hour in good_hours:
                 # Good hours - standard requirements
@@ -9073,6 +9060,25 @@ class EnhancedMultiStrategyTradingBot:
     
     def manage_all_positions(self):
         """Enhanced position management with multiple safety layers and trailing stops"""
+    
+    def take_partial_profits_quality(self, position):
+        """Take profits at 1.5% and 3% for consistent 2-3% daily"""
+        pnl_pct = position.get('pnl_pct', 0)
+        
+        # 50% at 1.5%
+        if pnl_pct >= 1.5 and not position.get('partial_1'):
+            qty = position['qty'] * 0.5
+            self.order_manager.close_position(position['symbol'], position['side'], qty, "PROFIT_1.5%")
+            position['partial_1'] = True
+            logger.info(f"💰 Took 50% profit at 1.5%")
+            
+        # 25% at 3%
+        elif pnl_pct >= 3.0 and not position.get('partial_2'):
+            qty = position['qty'] * 0.25
+            self.order_manager.close_position(position['symbol'], position['side'], qty, "PROFIT_3%")
+            position['partial_2'] = True
+            logger.info(f"💰 Took 25% profit at 3%")
+    
         try:
             positions = self.account_manager.get_open_positions()
         
@@ -9140,6 +9146,29 @@ class EnhancedMultiStrategyTradingBot:
                             continue
                         
                         # Profit management - let trailing stops handle most of this
+                        # QUALITY TRADING - PARTIAL PROFIT TAKING
+                        if pnl_pct >= 1.5 and not hasattr(pos, 'partial_1_taken'):
+                            # Take 50% profit at 1.5%
+                            partial_qty = qty * 0.5
+                            logger.info(f"💰 [{strategy_name}] Taking 50% profit at {pnl_pct:.2f}%")
+                            if self.order_manager.close_position(symbol, side, partial_qty, f"{strategy_name}_PARTIAL_1.5%"):
+                                self.daily_realized_pnl += unrealized_pnl * 0.5
+                                self.profitable_trades += 0.5
+                                pos['partial_1_taken'] = True
+                                logger.info(f"✅ [{strategy_name}] Locked in 50% at 1.5% profit")
+                                continue
+                        
+                        elif pnl_pct >= 3.0 and not hasattr(pos, 'partial_2_taken'):
+                            # Take 25% more at 3%
+                            partial_qty = qty * 0.25
+                            logger.info(f"💰 [{strategy_name}] Taking 25% profit at {pnl_pct:.2f}%")
+                            if self.order_manager.close_position(symbol, side, partial_qty, f"{strategy_name}_PARTIAL_3%"):
+                                self.daily_realized_pnl += unrealized_pnl * 0.25
+                                self.profitable_trades += 0.25
+                                pos['partial_2_taken'] = True
+                                logger.info(f"✅ [{strategy_name}] Locked in 25% at 3% profit")
+                                continue
+                        
 # #                         if unrealized_pnl >= config.profit_target_usd:
                             logger.info(f"📈 [{strategy_name}] PROFIT TARGET HIT for {symbol}: ${unrealized_pnl:.2f}")
                             
@@ -9375,7 +9404,7 @@ class EnhancedMultiStrategyTradingBot:
                 # Adaptive sleep based on market activity and total positions
                 positions = self.account_manager.get_open_positions()
                 if positions:
-                    sleep_time = 20
+                    sleep_time = 45
                 else:
                     sleep_time = 15
                 
