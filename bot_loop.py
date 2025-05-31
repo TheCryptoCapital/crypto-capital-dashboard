@@ -1184,17 +1184,35 @@ class EnhancedTrailingStopManager:
         config = position.config
         entry_price = position.entry_price
         side = position.side
+    def calculate_initial_stop_loss(self, position: TrailingPosition) -> float:
+        """Calculate smart stop loss - protective or profit-locking based on current P&L"""
+        config = position.config
+        entry_price = position.entry_price
+        side = position.side
         
-        stop_pct = config.initial_stop_pct / 100
+        # Calculate current profit
+        profit_pct = self.calculate_profit_percentage(position)
         
-        # FIXED: Correct stop loss direction for both Buy and Sell
-        if side == "Buy":
-            stop_price = entry_price * (1 + stop_pct)  # For SELL, stop is ABOVE entry  # Stop BELOW entry for Buy/Long
-        else:  # Sell
-            stop_price = entry_price * (1 + stop_pct)  # Stop ABOVE entry for Sell/Short
+        if profit_pct > 0.5:  # If profitable by 0.5%+
+            # Set profit-locking stop at breakeven + 0.2%
+            if side == "Buy":
+                stop_price = entry_price * 1.002  # Lock in 0.2% profit
+            else:
+                stop_price = entry_price * 0.998
+            stop_type = "profit-locking"
+            stop_distance = 0.2
+        else:
+            # Set protective stop at -1.5% risk
+            if side == "Buy":
+                stop_price = entry_price * 0.985  # 1.5% below entry
+            else:
+                stop_price = entry_price * 1.015  # 1.5% above entry
+            stop_type = "protective"
+            stop_distance = -1.5
         
-        self.logger.info(f"💰 Initial profitable stop: {position.symbol} → ${stop_price:.4f} "
-                        f"(+{config.initial_stop_pct}%) [{position.strategy}]")
+        self.logger.info(f"{'💰' if stop_type == 'profit-locking' else '🛡️'} {stop_type.capitalize()} stop: "
+                        f"{position.symbol} → ${stop_price:.4f} ({stop_distance:+.1f}%) "
+                        f"[Current P&L: {profit_pct:+.2f}%] [{position.strategy}]")
         return round(stop_price, 6)
     
     def calculate_profit_percentage(self, position: TrailingPosition) -> float:
@@ -1216,7 +1234,18 @@ class EnhancedTrailingStopManager:
             return True
         
         profit_pct = self.calculate_profit_percentage(position)
+        
+        # Only activate trailing if position is profitable
+        if position.side == "Buy":
+            in_profit = position.current_price > position.entry_price
+        else:
+            in_profit = position.current_price < position.entry_price
+        
+        if not in_profit:
+            return False  # Don't activate trailing until profitable
+        
         should_activate = profit_pct >= position.config.trail_activation_pct
+
         
         if should_activate:
             with self.lock:
@@ -8001,7 +8030,7 @@ class OrderManager:
                 stop_pct = 0.004  # Default 0.4% profit stop
             
             if side == "Buy":
-                stop_price = entry_price * (1 + stop_pct)  # For SELL, stop is ABOVE entry  # FIXED: Stop below for Buy
+                stop_price = entry_price * (1 - 0.015)  # 1.5% initial stop  # For SELL, stop is ABOVE entry  # FIXED: Stop below for Buy
             else:
                 stop_price = entry_price * (1 + stop_pct)  # FIXED: Stop above for Sell
             
@@ -8957,11 +8986,24 @@ class EnhancedMultiStrategyTradingBot:
                     risk_amount = balance_info['available'] * (config.risk_per_trade_pct / 100)
                     
                     # Estimate stop loss for position sizing
-                    stop_loss_distance = config_data['max_loss'] / 100 * current_price
-                    if side == "Buy":
-                        estimated_stop = current_price - stop_loss_distance
+                    # Calculate position size with proper risk management
+                    balance_info = self.account_manager.get_account_balance()
+                    available_balance = balance_info["available"]
+                    risk_amount = available_balance * 0.015  # 1.5% of balance
+                    
+                    # Use reasonable stop distance based on strategy
+                    if "SCALP" in strategy_name.upper():
+                        stop_distance_pct = 0.01  # 1% for scalping
+                    elif "SWING" in strategy_name.upper():
+                        stop_distance_pct = 0.03  # 3% for swing trades
                     else:
-                        estimated_stop = current_price + stop_loss_distance
+                        stop_distance_pct = 0.02  # 2% default
+                    
+                    # Calculate the actual stop price
+                    if side == "Buy":
+                        estimated_stop = current_price * (1 - stop_distance_pct)
+                    else:
+                        estimated_stop = current_price * (1 + stop_distance_pct)
                     
                     qty = self.account_manager.calculate_position_size_safe(
                         symbol, current_price, estimated_stop, risk_amount
@@ -9215,7 +9257,7 @@ class EnhancedMultiStrategyTradingBot:
                         # Fixed: Handle TrailingPosition object properly
                         if hasattr(tracking, 'trailing_active'):                            trailing_status = "🎯" if tracking.trailing_active else "💰"
                         else:
-                            trailing_status = "🎯" if (hasattr(tracking, 'trailing_active') and getattr(tracking, 'trailing_active', False)) or (hasattr(tracking, 'get') and tracking.get('trailing_active', False)) else "💰"
+                            trailing_status = "🎯" if (hasattr(tracking, 'trailing_active') and getattr(tracking, 'trailing_active', False)) or (hasattr(tracking, 'get') and (tracking and hasattr(tracking, 'trailing_active') and tracking.trailing_active)) else "💰"
                         
                         logger.info(f"      {pnl_indicator}{risk_level}{trailing_status} {pos['symbol']}: {pos['side']} {pos['qty']} | "
                                   f"Entry: ${pos['entry']:.4f} | Current: ${pos['current']:.4f} | "
@@ -9223,7 +9265,7 @@ class EnhancedMultiStrategyTradingBot:
             
             # Trailing Stop Summary
             active_trailing = sum(1 for t in self.trailing_stop_manager.position_tracking.values() 
-                                if t.get('trailing_active', False))
+                                if (hasattr(t, 'trailing_active') and t.trailing_active))
             logger.info(f"\n🎯 TRAILING STOPS: {active_trailing}/{len(positions)} positions active")
             
             # Safety Status
@@ -9430,7 +9472,7 @@ class EnhancedMultiStrategyTradingBot:
                 'trailing_stops': {
                     'total_positions_tracked': len(self.trailing_stop_manager.position_tracking),
                     'active_trailing_stops': sum(1 for t in self.trailing_stop_manager.position_tracking.values() 
-                                                if t.get('trailing_active', False)),
+                                                if (hasattr(t, 'trailing_active') and t.trailing_active)),
                     'strategy_configs': {k: {
                         'initial_stop_pct': v.initial_stop_pct,
                         'trail_activation_pct': v.trail_activation_pct,
