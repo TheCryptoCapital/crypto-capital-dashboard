@@ -1,5 +1,4 @@
 
-
 # =====================================
 # FULL-FEATURED HYBRID TRADING BOT - COMPLETE MULTI-STRATEGY VERSION
 # All critical fixes applied for safe trading + 8 Advanced Strategies
@@ -941,14 +940,6 @@ class TechnicalAnalysis:
                 'max_age_seconds': self.cache_max_age
             }
 
-# Initialize Technical Analysis Engine
-# Initialize global trailing stop manager
-trailing_stop_manager = None
-ta_engine = TechnicalAnalysis(session)
-# Global trailing stop manager
-trailing_stop_manager = None
-logger.info("�� Technical Analysis Engine initialized for HF trading")
-
 # =====================================
 # ENHANCED TRAILING STOP LOSS SYSTEM
 # =====================================
@@ -1014,6 +1005,8 @@ class TrailingPosition:
     # Configuration
     config: HFTrailingConfig
 
+    last_exchange_stop: Optional[float] = None
+
 class EnhancedTrailingStopManager:
     """
     Enhanced High-Frequency Trailing Stop Manager
@@ -1033,6 +1026,9 @@ class EnhancedTrailingStopManager:
         # Position tracking (your system's approach)
         self.position_tracking: Dict[str, TrailingPosition] = {}
         self.last_update_times: Dict[str, datetime] = {}
+        self.exchange_stops: Dict[str, float] = {}  # symbol -> last_stop_price
+
+        self.last_api_error_code = None
         
         # HF Performance tracking (enhanced from your system)
         self.hf_performance_stats = {
@@ -1153,7 +1149,8 @@ class EnhancedTrailingStopManager:
                     stops_updated_count=0,
                     profit_locked=0.0,
                     max_profit_reached=0.0,
-                    config=strategy_config
+                    config=strategy_config,
+                    last_exchange_stop=None,
                 )
                 
                 self.position_tracking[symbol] = position
@@ -1197,7 +1194,7 @@ class EnhancedTrailingStopManager:
             stop_type = "protective"
             stop_distance = -1.5
         
-        self.logger.info(f"{'💰' if stop_type == 'profit-locking' else '🛡️'} {stop_type.capitalize()} stop: "
+        self.logger.info(f"{'💰' if stop_type == 'profit-locking' else '��️'} {stop_type.capitalize()} stop: "
                         f"{position.symbol} → ${stop_price:.4f} ({stop_distance:+.1f}%) "
                         f"[Current P&L: {profit_pct:+.2f}%] [{position.strategy}]")
         return round(stop_price, 6)
@@ -1327,7 +1324,7 @@ class EnhancedTrailingStopManager:
             current_time = time.time()
             time_since_last_call = current_time - self.last_api_call
             if time_since_last_call < self.api_call_interval:
-                asyncio.sleep(self.api_call_interval - time_since_last_call)
+                time.sleep(self.api_call_interval - time_since_last_call)
             
             # Make API call
             result = self.bybit_session.set_trading_stop(
@@ -1363,24 +1360,29 @@ class EnhancedTrailingStopManager:
                 self.logger.info(f"✅ STOP UPDATED: {position.symbol} → ${new_stop_price:.4f} [{position.strategy}]")
                 return True
             else:
-                self.hf_performance_stats['failed_updates'] += 1
-                self.logger.warning(f"⚠️ Failed to update stop for {position.symbol}: {result.get('retMsg', 'Unknown error')}")
+                # Store the error code
+                self.last_api_error_code = result.get('retCode') if result else None
+    
+                # Only log actual errors, not "not modified" errors
+                if self.last_api_error_code != 34040:  # 34040 is "not modified"
+                    self.hf_performance_stats['failed_updates'] += 1
+                    self.logger.warning(f"⚠️ Failed to update stop for {position.symbol}: {result.get('retMsg', 'Unknown error')}")
                 return False
-                
+ 
         except Exception as e:
             self.hf_performance_stats['failed_updates'] += 1
             self.logger.error(f"❌ Error updating stop for {position.symbol}: {e}")
             return False
     
+
     def manage_trailing_stops_for_position(self, position_data: Dict) -> bool:
-        """Enhanced single position management"""
+        """Enhanced single position management with redundant update prevention"""
         try:
             symbol = position_data['symbol']
             current_price = position_data.get('current', 0)
-            
             if current_price <= 0:
                 return False
-            
+        
             # Get or create position tracking
             if symbol not in self.position_tracking:
                 strategy_name = position_data.get('strategy', 'UNKNOWN')
@@ -1390,30 +1392,69 @@ class EnhancedTrailingStopManager:
                 )
                 if not success:
                     return False
-            
+        
             position = self.position_tracking[symbol]
             position.current_price = current_price
-            
+        
             # Update best price
             self.update_best_price(position)
-            
+        
             # Set initial stop if needed
             if not position.initial_stop_set:
                 initial_stop = self.calculate_initial_stop_loss(position)
-                if self.update_stop_loss_on_exchange(position, initial_stop):
-                    position.initial_stop_set = True
             
+                # Check if this stop is different from what's already on exchange
+                last_exchange_stop = self.exchange_stops.get(symbol)
+            
+                if last_exchange_stop is None:
+                    # First time setting stop
+                    if self.update_stop_loss_on_exchange(position, initial_stop):
+                        position.initial_stop_set = True
+                        self.exchange_stops[symbol] = initial_stop
+                elif abs(initial_stop - last_exchange_stop) > current_price * 0.0001:
+                    # Stop has changed meaningfully (>0.01% of price)
+                    if self.update_stop_loss_on_exchange(position, initial_stop):
+                        position.initial_stop_set = True
+                        self.exchange_stops[symbol] = initial_stop
+                else:
+                    # Stop hasn't changed, mark as set without API call
+                    position.initial_stop_set = True
+        
             # Check trailing activation
             if not self.should_activate_trailing(position):
                 return True
             
             # Calculate and update trailing stop
             new_stop_price = self.calculate_trailing_stop_price(position)
-            if new_stop_price and self.should_update_stop(position, new_stop_price):
-                return self.update_stop_loss_on_exchange(position, new_stop_price)
+        
+            if new_stop_price:
+                # Check if new stop is meaningfully different from last exchange stop
+                last_exchange_stop = self.exchange_stops.get(symbol)
+                needs_update = False
             
+                if last_exchange_stop is None:
+                    # No previous stop recorded
+                    needs_update = True
+                else:
+                    # Calculate the difference
+                    stop_difference = abs(new_stop_price - last_exchange_stop)
+                
+                    # Only update if stop has moved by at least 0.01% of current price
+                    # or by the minimum step percentage from config
+                    min_change = max(
+                        current_price * 0.0001,  # 0.01% of price
+                        last_exchange_stop * (position.config.min_trail_step_pct / 100)
+                    )
+                
+                    needs_update = stop_difference >= min_change
+            
+                if needs_update and self.should_update_stop(position, new_stop_price):
+                    if self.update_stop_loss_on_exchange(position, new_stop_price):
+                        self.exchange_stops[symbol] = new_stop_price
+                        return True
+        
             return True
-            
+        
         except Exception as e:
             self.logger.error(f"❌ Position management error for {symbol}: {e}")
             return False
@@ -1439,7 +1480,7 @@ class EnhancedTrailingStopManager:
                         pos = self.position_tracking[symbol]
                         profit_pct = self.calculate_profit_percentage(pos)
                         is_trailing = pos.trailing_active
-                        status_emoji = "��" if is_trailing else "💰"
+                        status_emoji = "��" if is_trailing else "��"
                         
                         self.logger.info(f"{status_emoji} {symbol}: {profit_pct:+.2f}% | "
                                        f"Trailing: {'ON' if is_trailing else 'OFF'} [{pos.strategy}]")
@@ -5678,7 +5719,7 @@ class BollingerBandsStrategy(BaseStrategy):
         }
         self.opportunity_pool.clear()
         
-        self.logger.info("🔄 HFQ-BB daily counters reset")
+        self.logger.info("�� HFQ-BB daily counters reset")
     
     def get_strategy_specific_info(self) -> Dict:
         """Get HFQ-BB specific strategy information"""
@@ -7355,7 +7396,7 @@ class AccountManager:
                             "position_value": size * entry_price,
                             "leverage": float(pos.get("leverage", 1)),
                             "liq_price": float(pos.get("liqPrice", 0)) if pos.get("liqPrice") else 0,
-                            "strategy": pos.get("strategy", "MULTI_STRATEGY")
+                            "strategy": pos.get("strategy", "SCALPING")
                         }
                         active.append(position_info)
                 except (ValueError, KeyError) as e:
@@ -8104,7 +8145,7 @@ class OrderManager:
                     logger.error(f"❌ Stop loss too close for {symbol}: {stop_distance:.3%}")
                     return None
                 
-                logger.info(f"🚀 [{strategy_name}] Placing {side} order: {symbol} {qty} @ ${current_price:.4f} (${position_value:.2f})")
+                logger.info(f"�� [{strategy_name}] Placing {side} order: {symbol} {qty} @ ${current_price:.4f} (${position_value:.2f})")
                 
                 order = self.session.place_order(
                     category="linear",
@@ -9059,43 +9100,64 @@ class EnhancedMultiStrategyTradingBot:
             logger.error(f"❌ Multi-strategy entry scanning error: {e}")
     
     def manage_all_positions(self):
-        """Enhanced position management with multiple safety layers and trailing stops"""
-    
-    def take_partial_profits_quality(self, position):
-        """Take profits at 1.5% and 3% for consistent 2-3% daily"""
-        pnl_pct = position.get('pnl_pct', 0)
-        
-        # 50% at 1.5%
-        if pnl_pct >= 1.5 and not position.get('partial_1'):
-            qty = position['qty'] * 0.5
-            self.order_manager.close_position(position['symbol'], position['side'], qty, "PROFIT_1.5%")
-            position['partial_1'] = True
-            logger.info(f"💰 Took 50% profit at 1.5%")
-            
-        # 25% at 3%
-        elif pnl_pct >= 3.0 and not position.get('partial_2'):
-            qty = position['qty'] * 0.25
-            self.order_manager.close_position(position['symbol'], position['side'], qty, "PROFIT_3%")
-            position['partial_2'] = True
-            logger.info(f"💰 Took 25% profit at 3%")
-    
+        """Enhanced position management with better trailing stop debugging"""
         try:
             positions = self.account_manager.get_open_positions()
-        
+            
             if not positions:
                 return
-        
+                
+            logger.info(f"📊 Managing {len(positions)} positions...")
+            
+            # DEBUG: Check if trailing_stop_manager exists
+            if not self.trailing_stop_manager:
+                logger.error("❌ CRITICAL: self.trailing_stop_manager is None!")
+                return
+                
+            # DEBUG: Log current tracking state
+            logger.info(f"🎯 Trailing Stop Status:")
+            logger.info(f"   Manager exists: {'✅' if self.trailing_stop_manager else '❌'}")
+            logger.info(f"   Tracked positions: {len(self.trailing_stop_manager.position_tracking)}")
+            logger.info(f"   Tracked symbols: {list(self.trailing_stop_manager.position_tracking.keys())}")
+            
+            # Check each position and initialize tracking if needed
+            for pos in positions:
+                symbol = pos["symbol"]
+                logger.info(f"📍 Checking {symbol}:")
+                logger.info(f"   In tracking: {'✅' if symbol in self.trailing_stop_manager.position_tracking else '❌'}")
+                
+                # Initialize if not tracked
+                if symbol not in self.trailing_stop_manager.position_tracking:
+                    logger.warning(f"⚠️ {symbol} not tracked - initializing now!")
+                    strategy_name = pos.get('strategy', 'SCALPING')
+                    
+                    # Initialize position tracking
+                    self.trailing_stop_manager.initialize_position_tracking(
+                        symbol=symbol,
+                        entry_price=pos["entry"],
+                        side=pos["side"],
+                        strategy_name=strategy_name,
+                        position_size=pos["qty"]
+                    )
+                    
+                    # Set initial stop loss
+                    position = self.trailing_stop_manager.position_tracking[symbol]
+                    initial_stop = self.trailing_stop_manager.calculate_initial_stop_loss(position)
+                    
+                    if self.trailing_stop_manager.update_stop_loss_on_exchange(position, initial_stop):
+                        position.initial_stop_set = True
+                        logger.info(f"✅ Initial stop set for {symbol} at ${initial_stop:.4f}")
+                    else:
+                        logger.error(f"❌ Failed to set initial stop for {symbol}")
+                        
+            # Call the actual management
+            self.trailing_stop_manager.manage_all_trailing_stops(positions)
+            self.trailing_stop_manager.cleanup_closed_positions(positions)
+            
             # Get balance for percentage calculations
             balance_info = self.account_manager.get_account_balance()
             available_balance = balance_info["available"]
-        
-            logger.info(f"📊 Managing {len(positions)} positions across all strategies...")
-        
-            # First, manage trailing stops for all positions
-            # Properly manage trailing stops
-            self.trailing_stop_manager.manage_all_trailing_stops(positions)
-            self.trailing_stop_manager.cleanup_closed_positions(positions)
- 
+            
             # Group positions by strategy for better reporting
             positions_by_strategy = defaultdict(list)
             for pos in positions:
@@ -9115,7 +9177,12 @@ class EnhancedMultiStrategyTradingBot:
                         unrealized_pnl = pos["pnl"]
                         pnl_pct = pos["pnl_pct"]
                         
-                        logger.info(f"   📈 {symbol}: {side} {qty} @ ${entry:.4f} | "
+                        # Log position details with trailing status
+                        tracking = self.trailing_stop_manager.position_tracking.get(symbol, {})
+                        is_trailing = tracking.trailing_active if hasattr(tracking, 'trailing_active') else False
+                        trail_emoji = "🎯" if is_trailing else "💰"
+                        
+                        logger.info(f"   {trail_emoji} {symbol}: {side} {qty} @ ${entry:.4f} | "
                                   f"Current: ${current:.4f} | P&L: ${unrealized_pnl:+.2f} ({pnl_pct:+.2f}%)")
                         
                         # EMERGENCY STOP LOSS
@@ -9131,9 +9198,6 @@ class EnhancedMultiStrategyTradingBot:
                             continue
                         
                         # Regular max loss check
-                        # Get balance for max loss calculation
-                        balance_info = self.account_manager.get_account_balance()
-                        
                         max_loss = available_balance * 0.015
                         if unrealized_pnl <= -max_loss:
                             logger.warning(f"🛑 [{strategy_name}] MAX LOSS HIT for {symbol}: ${unrealized_pnl:.2f}")
@@ -9145,51 +9209,31 @@ class EnhancedMultiStrategyTradingBot:
                                 self.trade_logger.log_trade(symbol, side, qty, current, "CLOSE_LOSS", unrealized_pnl, strategy_name)
                             continue
                         
-                        # Profit management - let trailing stops handle most of this
-                        # QUALITY TRADING - PARTIAL PROFIT TAKING
-                        if pnl_pct >= 1.5 and not hasattr(pos, 'partial_1_taken'):
-                            # Take 50% profit at 1.5%
-                            partial_qty = qty * 0.5
-                            logger.info(f"💰 [{strategy_name}] Taking 50% profit at {pnl_pct:.2f}%")
-                            if self.order_manager.close_position(symbol, side, partial_qty, f"{strategy_name}_PARTIAL_1.5%"):
-                                self.daily_realized_pnl += unrealized_pnl * 0.5
-                                self.profitable_trades += 0.5
-                                pos['partial_1_taken'] = True
-                                logger.info(f"✅ [{strategy_name}] Locked in 50% at 1.5% profit")
-                                continue
-                        
-                        elif pnl_pct >= 3.0 and not hasattr(pos, 'partial_2_taken'):
-                            # Take 25% more at 3%
-                            partial_qty = qty * 0.25
-                            logger.info(f"💰 [{strategy_name}] Taking 25% profit at {pnl_pct:.2f}%")
-                            if self.order_manager.close_position(symbol, side, partial_qty, f"{strategy_name}_PARTIAL_3%"):
-                                self.daily_realized_pnl += unrealized_pnl * 0.25
-                                self.profitable_trades += 0.25
-                                pos['partial_2_taken'] = True
-                                logger.info(f"✅ [{strategy_name}] Locked in 25% at 3% profit")
-                                continue
-                        
-# #                         if unrealized_pnl >= config.profit_target_usd:
-                            logger.info(f"📈 [{strategy_name}] PROFIT TARGET HIT for {symbol}: ${unrealized_pnl:.2f}")
+                        # Profit management - let trailing stops handle this
+                        if pnl_pct >= 1.5:
+                            logger.info(f"💰 [{strategy_name}] {symbol} in profit: {pnl_pct:.2f}% | Trailing: {'✅' if is_trailing else '❌'}")
                             
-                            # Check if trailing is active
-                            tracking = self.trailing_stop_manager.position_tracking.get(symbol, {})
-                            is_trailing = getattr(tracking, 'trailing_active', False) if hasattr(tracking, 'trailing_active') else getattr(tracking, 'trailing_active', False) if hasattr(tracking, 'trailing_active') else (getattr(tracking, 'trailing_active', False) if hasattr(tracking, 'trailing_active') else False)
-                            
-                            if not is_trailing:
-                                # Take partial profit if trailing not active yet
-                                partial_qty = qty * 0.5  # Close 50%
-                                if self.order_manager.close_position(symbol, side, partial_qty, strategy_name):
-                                    partial_pnl = unrealized_pnl * 0.5
-                                    self.daily_realized_pnl += partial_pnl
-                                    self.profitable_trades += 1
-                                    self.consecutive_losses = 0
-                                    self.strategy_stats[strategy_name]['wins'] += 1
-                                    self.strategy_stats[strategy_name]['pnl'] += partial_pnl
-                                    self.trade_logger.log_trade(symbol, side, partial_qty, current, "CLOSE_PARTIAL", partial_pnl, strategy_name)
-                                    logger.info(f"💰 [{strategy_name}] Partial profit taken: ${partial_pnl:.2f}")
+                            # Optional: Take partial profits
+                            if pnl_pct >= 1.5 and not hasattr(pos, 'partial_1_taken'):
+                                # Take 50% profit at 1.5%
+                                partial_qty = qty * 0.5
+                                logger.info(f"💰 [{strategy_name}] Taking 50% profit at {pnl_pct:.2f}%")
+                                if self.order_manager.close_position(symbol, side, partial_qty, f"{strategy_name}_PARTIAL_1.5%"):
+                                    self.daily_realized_pnl += unrealized_pnl * 0.5
+                                    self.profitable_trades += 0.5
+                                    pos['partial_1_taken'] = True
+                                    logger.info(f"✅ [{strategy_name}] Locked in 50% at 1.5% profit")
+                            elif pnl_pct >= 3.0 and not hasattr(pos, 'partial_2_taken'):
+                                # Take 25% more at 3%
+                                partial_qty = qty * 0.25
+                                logger.info(f"💰 [{strategy_name}] Taking 25% profit at {pnl_pct:.2f}%")
+                                if self.order_manager.close_position(symbol, side, partial_qty, f"{strategy_name}_PARTIAL_3%"):
+                                    self.daily_realized_pnl += unrealized_pnl * 0.25
+                                    self.profitable_trades += 0.25
+                                    pos['partial_2_taken'] = True
+                                    logger.info(f"✅ [{strategy_name}] Locked in 25% at 3% profit")
                         
-                        time.sleep(0.3)  # Brief pause between position updates
+                        time.sleep(0.1)  # Brief pause between position updates
                         
                     except Exception as e:
                         logger.error(f"❌ Error managing position {pos.get('symbol', 'UNKNOWN')}: {e}")
@@ -9197,6 +9241,26 @@ class EnhancedMultiStrategyTradingBot:
                         
         except Exception as e:
             logger.error(f"❌ Position management error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    def take_partial_profits_quality(self, position):
+        """Take profits at 1.5% and 3% for consistent 2-3% daily"""
+        pnl_pct = position.get('pnl_pct', 0)
+        
+        # 50% at 1.5%
+        if pnl_pct >= 1.5 and not position.get('partial_1'):
+            qty = position['qty'] * 0.5
+            self.order_manager.close_position(position['symbol'], position['side'], qty, "PROFIT_1.5%")
+            position['partial_1'] = True
+            logger.info(f"💰 Took 50% profit at 1.5%")
+            
+        # 25% at 3%
+        elif pnl_pct >= 3.0 and not position.get('partial_2'):
+            qty = position['qty'] * 0.25
+            self.order_manager.close_position(position['symbol'], position['side'], qty, "PROFIT_3%")
+            position['partial_2'] = True
+            logger.info(f"💰 Took 25% profit at 3%")
     
     def print_comprehensive_summary(self):
         """Print detailed multi-strategy bot performance summary"""
@@ -9268,7 +9332,7 @@ class EnhancedMultiStrategyTradingBot:
             logger.info(f"   Remaining Daily Loss: ${config.daily_loss_cap + self.daily_realized_pnl:,.2f}")
             
             # Position Status with Strategy Breakdown
-            logger.info(f"🔄 POSITION STATUS:")
+            logger.info(f"�� POSITION STATUS:")
             logger.info(f"   Total Open Positions: {len(positions)}/{config.max_concurrent_trades}")
             
             if positions:
@@ -9675,29 +9739,52 @@ if __name__ == "__main__":
         # Create AccountManager configuration
         logger.info(f"�� {account_manager.get_balance_summary() if hasattr(account_manager, 'get_balance_summary') else 'AccountManager ready'}")
 
-                # Initialize global trailing stop manager
-        logger.info("🎯 Initializing global trailing stop manager...")
+        # Initialize AccountManager
+        logger.info("🤖 Initializing AccountManager...")
+        am_config = AccountManagerConfig()
+        account_manager = EnhancedAccountManager(session, am_config)
+        logger.info("✅ AccountManager ready")
+        logger.info(f"💰 {account_manager.get_balance_summary() if hasattr(account_manager, 'get_balance_summary') else 'AccountManager ready'}")
+
+        # ← ← ← PASTE YOUR CODE HERE ← ← ←
+        
+        # Initialize Technical Analysis Engine
+        ta_engine = TechnicalAnalysis(session)
+        logger.info("📊 Technical Analysis Engine initialized for HF trading")
+        
+        # Initialize global trailing stop manager (FIXED - not None anymore!)
         trailing_stop_manager = EnhancedTrailingStopManager(
             session=session,
             market_data=ta_engine,
             config=config,
             logger=logger
         )
-        logger.info("✅ Trailing stop manager ready")
+        logger.info("🎯 Global Trailing Stop Manager initialized")
         
-        # Initialize OrderManager
-        logger.info("🔧 Initializing OrderManager...")
-        # Initialize trailing stop manager
+        # DEBUG: Verify trailing stop manager is working
+        logger.info("🔍 Testing Trailing Stop Manager...")
+        logger.info(f"   Class Type: {type(trailing_stop_manager).__name__}")
+        logger.info(f"   Has session: {'✅' if trailing_stop_manager.session else '❌'}")
+        logger.info(f"   Has market_data: {'✅' if trailing_stop_manager.market_data else '❌'}")
+        logger.info(f"   Position tracking dict: {'✅' if hasattr(trailing_stop_manager, 'position_tracking') else '❌'}")
+        logger.info(f"   Strategy configs: {len(trailing_stop_manager.strategy_configs)}")
         
-        # Initialize order manager
-        order_manager = OrderManager(session, account_manager, trailing_stop_manager, config)
-        logger.info("✅ OrderManager ready")
+        # Additional debug - check if it's properly linked to global scope
+        logger.info(f"   Is global: {'✅' if 'trailing_stop_manager' in globals() else '❌'}")
+        logger.info(f"   Memory address: {id(trailing_stop_manager)}")
         
+        # Test a method to ensure it's working
+        try:
+            test_stats = trailing_stop_manager.get_hf_performance_stats()
+            logger.info(f"   Method test: ✅ (active positions: {test_stats.get('active_positions', 0)})")
+        except Exception as e:
+            logger.error(f"   Method test: ❌ ({str(e)})")
+
+        # ← ← ← THEN THE BOT CREATION CONTINUES BELOW ← ← ←
         bot = EnhancedMultiStrategyTradingBot()
-        
-        logger.info("�� Multi-Strategy Bot ready! Starting execution...")
+        logger.info("🚀 Multi-Strategy Bot ready! Starting execution...")
         bot.run()
-        
+    
     except Exception as e:
         logger.error(f"❌ FATAL ERROR: {e}")
         logger.error(traceback.format_exc())
@@ -9916,4 +10003,3 @@ logger.info(f"   Safety Features: {len(BOT_METADATA['safety_features'])}")
 # Features: Complete Multi-Strategy System with Trailing Stops
 # Safety: Professional Risk Management
 # =====================================
-
