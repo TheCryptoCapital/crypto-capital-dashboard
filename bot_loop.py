@@ -165,7 +165,8 @@ class TrailingConfig:
 @dataclass
 class TradingConfig:
     # Position Management - HF BOT OPTIMIZED
-    max_position_value: float = 1200                 # ~$1200 max position (21% of balance)
+    max_position_value_pct: float = 30.0                 # ~$1200 max position (30% of balance)
+    max_position_value: float = 0                        # Will be calculated dynamically
     max_concurrent_trades: int = 4                  # ✅ Focus on quality# 8 concurrent positions
 # #     profit_target_usd: float = 60                    # $60 profit target (~1% of balance)
     trail_lock_usd: float = 30                       # Lock $30 profit when trailing
@@ -174,7 +175,7 @@ class TradingConfig:
     min_required_balance: float = 1000
     
     # Risk Management - HF OPTIMIZED
-    risk_per_trade_pct: float = 1.5                  # 1.5% risk per trade for HF
+    risk_per_trade_pct: float = 2.0                  # 2.0% risk per trade for HF
     max_portfolio_risk_pct: float = 12.0             # 8 × 1.5%
     position_sizing_method: str = "risk_based"
     emergency_stop_loss_multiplier: float = 1.3      # Tighter emergency stop
@@ -192,8 +193,8 @@ class TradingConfig:
     # HIGH-FREQUENCY TRADING LOGIC
     signal_type: SignalType = SignalType.MULTI_STRATEGY
     trading_mode: TradingMode = TradingMode.AGGRESSIVE
-    scan_interval: int = 45                          # ✅ Quality scanning
-    min_signal_strength = 0.85                # Higher quality for fees
+    scan_interval: int = 30                          # ✅ Quality scanning
+    min_signal_strength = 0.75                # Higher quality for fees
     
     # Symbols and Markets
     symbols: List[str] = field(default_factory=list)
@@ -222,13 +223,17 @@ class TradingConfig:
     trailing_config: TrailingConfig = field(default_factory=TrailingConfig)
     
     def __post_init__(self):
+        # Initialize calculated fields
+        self.max_position_value = 0  # Will be set by calculate_dynamic_limits
+
         if not self.symbols:
             # TOP 12 MOST LIQUID PAIRS - Optimized for HF bot
-            self.symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+            self.symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "DOGEUSDT", "LINKUSDT", "MATICUSDT", "ARBUSDT", "INJUSDT", "SUIUSDT"]
         
         if not self.timeframes:
             # OPTIMIZED FOR HIGH-FREQUENCY
             self.timeframes = ["1", "3", "5"]  # Focus on short timeframes
+
         
         self.validate_hf_bot_config()
     
@@ -268,7 +273,7 @@ class TradingConfig:
         """Update limits based on current balance"""
         self.max_loss_per_trade = current_balance * (self.risk_per_trade_pct / 100)
 # #         self.profit_target_usd = current_balance * 0.01  # 1% of balance
-        self.max_position_value = current_balance * 0.21  # 21% of balance
+        self.max_position_value = current_balance * (self.max_position_value_pct / 100)  # 30% of balance
 # #         self.trail_lock_usd = self.profit_target_usd * 0.5  # Half of profit target
         self.daily_loss_cap = current_balance * 0.087  # 8.7% of balance
         
@@ -331,8 +336,8 @@ TRAILING_CONFIGS = {
     'SCALPING': TrailingConfig(
         initial_stop_pct=0.3,                        # Very tight for scalping
         trail_activation_pct=0.5,                    # Trail immediately
-        trail_distance_pct=0.12,                     # Very close trailing
-        min_trail_step_pct=0.04,                     # Tiny steps
+        trail_distance_pct=0.35,                     # Very close trailing
+        min_trail_step_pct=0.10,                     # Tiny steps
         max_update_frequency=10                      # Very frequent updates
     ),
     'MACD_MOMENTUM': TrailingConfig(
@@ -479,6 +484,16 @@ else:
 # Initialize HF-Optimized Configuration
 logger.info("⚙️ Initializing HF bot configuration...")
 config = TradingConfig()
+# Fetch initial balance for position sizing
+try:
+    initial_wallet = session.get_wallet_balance(accountType="UNIFIED")
+    if initial_wallet and initial_wallet.get("retCode") == 0:
+        balance = float(initial_wallet["result"]["list"][0]["totalWalletBalance"])
+        config.calculate_dynamic_limits(balance)
+        logger.info(f"✅ Position limits calculated for ${balance:.2f} balance")
+except:
+    config.calculate_dynamic_limits(5000)  # Default fallback
+    logger.info("⚠️ Using default balance for position limits")
 
 # Initialize safety mechanisms with HF optimization
 logger.info("🛡️ Initializing safety mechanisms...")
@@ -527,7 +542,7 @@ class TechnicalAnalysis:
         self.bybit_session = bybit_session
         self.price_cache = {}
         self.cache_lock = threading.Lock()
-        self.cache_max_age = 45  # HF: Cache for 45 seconds max
+        self.cache_max_age = 45  # HF: Cache for 30 seconds max
         self.cache_max_size = 500  # HF: Larger cache for more symbols
         
     def get_kline_data(self, symbol: str, interval: str = "5", limit: int = 100) -> Optional[pd.DataFrame]:
@@ -1062,10 +1077,10 @@ class EnhancedTrailingStopManager:
         """Initialize HF-optimized strategy configurations"""
         return {
             'RSI_SCALP': HFTrailingConfig(
-                initial_stop_pct=0.4,
-                trail_activation_pct=0.3,
-                trail_distance_pct=0.2,
-                min_trail_step_pct=0.05,
+                initial_stop_pct=0.6,
+                trail_activation_pct=1.0,
+                trail_distance_pct=0.5,
+                min_trail_step_pct=0.1,
                 max_update_frequency=5,
                 volatility_multiplier=1.2,
                 min_profit_lock_pct=0.15,
@@ -1088,10 +1103,10 @@ class EnhancedTrailingStopManager:
                 memory_cleanup_hours=24
             ),
             'SCALPING': HFTrailingConfig(
-                initial_stop_pct=0.3,
-                trail_activation_pct=0.2,
-                trail_distance_pct=0.15,
-                min_trail_step_pct=0.03,
+                initial_stop_pct=0.5,
+                trail_activation_pct=0.8,
+                trail_distance_pct=0.4,
+                min_trail_step_pct=0.1,
                 max_update_frequency=3,
                 volatility_multiplier=1.5,
                 min_profit_lock_pct=0.1,
@@ -1283,11 +1298,9 @@ class EnhancedTrailingStopManager:
         if side == "Buy":
             new_stop = best_price * (1 - trail_distance)
             # Don't let stop go below entry (ensure profit)
-            new_stop = max(new_stop, position.entry_price)
         else:  # Sell
             new_stop = best_price * (1 + trail_distance)
             # Don't let stop go above entry (ensure profit)
-            new_stop = min(new_stop, position.entry_price)
         
         return round(new_stop, 6)
     
@@ -1758,7 +1771,7 @@ class EliteStrategyConfig(StrategyConfig):
   
     def __init__(self, name: str, max_positions: int, position_value: float, 
                  # Parent class parameters
-                 min_confidence: float = 0.75,          # ↑ Higher threshold for HFQ
+                 min_confidence: float = 0.70,          # ↑ Higher threshold for HFQ
                  risk_per_trade_pct: float = 1.5,         # ↑ Optimized for HF trading
                  enabled: bool = True, 
                  signal_cache_seconds: int = 15,        # ↓ Faster cache for HFQ
@@ -1771,7 +1784,7 @@ class EliteStrategyConfig(StrategyConfig):
                  max_loss_pct: float = 0.7,            # ↓ Tighter stops with HFQ precision
                  leverage: int = 15,                    # ↑ Higher leverage for HFQ
                  timeframe: str = "1",                  # ↑ 1-minute for maximum frequency
-                 min_signal_strength = 0.85,     # ↑ Elite signal quality threshold
+                 min_signal_strength = 0.75,     # ↑ Elite signal quality threshold
                  
                  # 🧠 ADVANCED ML & REGIME FEATURES
                  regime_adaptive: bool = True,           # Elite regime detection
@@ -1804,9 +1817,9 @@ class EliteStrategyConfig(StrategyConfig):
                  scan_symbols = None,
                  
                  # 🏆 ELITE-SPECIFIC HFQ PARAMETERS
-                 min_quality_score: float = 0.80,       # ↑ Elite quality threshold
+                 min_quality_score: float = 0.75,       # ↑ Elite quality threshold
                  excellent_quality: float = 0.90,       # ↑ Higher standards
-                 elite_quality: float = 0.97,          # ↑ Ultra-elite threshold
+                 elite_quality: float = 0.85,          # ↑ Ultra-elite threshold
                  moderate_spike_ratio: float = 3.0,     # ↑ Higher spike detection
                  strong_spike_ratio: float = 5.0,       # ↑ Stronger signals
                  institutional_spike_ratio: float = 8.0, # ↑ Institutional-grade
@@ -1858,9 +1871,9 @@ class EliteStrategyConfig(StrategyConfig):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -1893,7 +1906,7 @@ class EliteStrategyConfig(StrategyConfig):
         self.max_positions = max_positions
         self.DAILY_LOSS_LIMIT_PCT = 0.10  # 10% daily loss limit
         self.RISK_PER_TRADE = self.risk_per_trade_pct / 100 if hasattr(self, 'risk_per_trade_pct') else 0.015
-        self.MAX_POSITION_PCT = 0.15  # 15% max position
+        self.MAX_POSITION_PCT = 0.30  # 15% max position
         self.MAX_PORTFOLIO_RISK = 0.50  # 50% max portfolio risk
         self.EMERGENCY_STOP_DRAWDOWN = 0.05  # 5% emergency stop
         self.MAX_CONCURRENT_POSITIONS = 5  # Max concurrent positions
@@ -1929,7 +1942,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_value=0,
             position_sizing_method="risk_based",
             risk_per_trade_pct=1.5,
-            min_confidence=0.85,
+            min_confidence=0.70,
             max_daily_trades=3,
             signal_cache_seconds=15,
             allowed_symbols=[
@@ -1978,7 +1991,7 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
             position_value=0,                            # ✅ Enable dynamic sizing
         position_sizing_method="risk_based",         # ✅ Use risk-based logic
             risk_per_trade_pct=1.5,                      # ✅ 1.5% per trade
-            min_confidence=0.85,
+            min_confidence=0.70,
             max_daily_trades=3,                         # Medium frequency
             signal_cache_seconds=45,                     # Medium cache
             allowed_symbols=[
@@ -2020,9 +2033,9 @@ def get_strategy_configs() -> Dict[StrategyType, StrategyConfig]:
                            'MATICUSDT', 'LTCUSDT', 'AVAXUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT'],
             
             # HFQ-specific settings
-            min_quality_score = 0.85,
+            min_quality_score = 0.75,
             excellent_quality = 0.92,
-            elite_quality = 0.97,
+            elite_quality = 0.85,
             moderate_spike_ratio = 3.0,
             strong_spike_ratio = 5.0,
             institutional_spike_ratio = 8.0,
@@ -2456,9 +2469,9 @@ class RSIStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -2739,9 +2752,9 @@ class EMAStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -3100,9 +3113,9 @@ class ScalpingStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -3524,9 +3537,9 @@ class MACDStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -4003,9 +4016,9 @@ class BreakoutStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -4480,9 +4493,9 @@ class VolumeSpikeStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -4508,7 +4521,7 @@ class VolumeSpikeStrategy(BaseStrategy):
         self.extreme_spike_ratio = 12.0       # 8.0x extreme spike
         
         # Quality thresholds
-        self.min_quality_score = 0.85        # 70% minimum quality
+        self.min_quality_score = 0.75        # 70% minimum quality
         self.excellent_quality = 0.92        # 85% excellent quality
         self.elite_quality = 0.97            # 95% elite quality
         
@@ -5023,9 +5036,9 @@ class BollingerBandsStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -5063,7 +5076,7 @@ class BollingerBandsStrategy(BaseStrategy):
         self.moderate_overbought_threshold = 0.75 # 75% from lower band
         
         # Quality thresholds
-        self.min_quality_score = 0.85            # 75% minimum quality
+        self.min_quality_score = 0.75            # 75% minimum quality
         self.excellent_quality = 0.92            # 88% excellent quality
         self.elite_quality = 0.97               # 95% elite quality
         
@@ -5761,9 +5774,9 @@ class HybridCompositeStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -5792,12 +5805,12 @@ class HybridCompositeStrategy(BaseStrategy):
         }
         
         # Quality thresholds (HFQ optimized)
-        self.min_quality_score = 0.85            # 70% minimum quality for HFQ
+        self.min_quality_score = 0.75            # 70% minimum quality for HFQ
         self.excellent_quality = 0.92            # 85% excellent quality
         self.elite_quality = 0.97                # 92% elite quality
         
         # Signal strength thresholds (HFQ optimized)
-        self.min_signal_strength = 0.85          # Lower threshold for HFQ
+        self.min_signal_strength = 0.75          # Lower threshold for HFQ
         self.strong_signal_threshold = 0.70      # Strong signal threshold
         self.elite_signal_threshold = 0.85       # Elite signal threshold
         
@@ -6327,9 +6340,9 @@ class RegimeAdaptiveStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6385,9 +6398,9 @@ class FundingArbitrageStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6439,9 +6452,9 @@ class NewsSentimentStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6493,9 +6506,9 @@ class MTFConfluenceStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6546,9 +6559,9 @@ class CrossMomentumStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6599,9 +6612,9 @@ class MLEnsembleStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6652,9 +6665,9 @@ class OrderbookImbalanceStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6705,9 +6718,9 @@ class CrossExchangeArbStrategy(BaseStrategy):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -6769,7 +6782,7 @@ STRATEGY_CONFIGS = {
         leverage=12,                     # ↑ Higher leverage with better risk control
         timeframe="3",
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
-        min_signal_strength = 0.85,        # ↑ Higher quality threshold
+        min_signal_strength = 0.75,        # ↑ Higher quality threshold
         regime_adaptive=True,
         ml_filter=True,
         volatility_scaling=True,
@@ -6790,7 +6803,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT"],
         timeframe="5",                   # ↑ Optimized 8-minute sweet spot
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,    # ← Elite feature
@@ -6810,7 +6823,7 @@ STRATEGY_CONFIGS = {
         leverage=15,                     # ↑ Maximum leverage for scalping
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,        # ↑ Very high quality for scalping
+        min_signal_strength = 0.75,        # ↑ Very high quality for scalping
         latency_critical=True,           # ← Elite execution
         microstructure_boost=True,       # ← Order flow analysis
         execution_alpha=True,
@@ -6831,7 +6844,7 @@ STRATEGY_CONFIGS = {
         leverage=8,
         scan_symbols=["SOLUSDT", "AVAXUSDT", "MATICUSDT", "DOTUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         regime_adaptive=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=1.7,
@@ -6852,7 +6865,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT", "LINKUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         microstructure_boost=True,       # ← Order flow integration
         news_integration=True,           # ← News-driven volume spikes
         execution_alpha=True,
@@ -6872,7 +6885,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "LINKUSDT", "AVAXUSDT", "MATICUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         regime_adaptive=True,
         volatility_scaling=True,
         ml_filter=True,
@@ -6892,7 +6905,7 @@ STRATEGY_CONFIGS = {
         leverage=1,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         ml_filter=True,
         performance_feedback=True,
         auto_parameter_tuning=True,
@@ -6911,7 +6924,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # Conservative for arbitrage
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"],
         timeframe="60",
-        min_signal_strength = 0.85,        # Extremely high confidence
+        min_signal_strength = 0.75,        # Extremely high confidence
         funding_aware=True,
         cross_asset_correlation=True,
         min_sharpe_threshold=3.0,        # High Sharpe for arbitrage
@@ -6930,7 +6943,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         news_integration=True,
         latency_critical=True,
         execution_alpha=True,
@@ -6950,7 +6963,7 @@ STRATEGY_CONFIGS = {
         leverage=18,                     # High leverage for fast moves
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True,
@@ -6970,7 +6983,7 @@ STRATEGY_CONFIGS = {
         leverage=10,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT", "LINKUSDT", "ADAUSDT"],
         timeframe="3",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         cross_asset_correlation=True,
         regime_adaptive=True,
         ml_filter=True,
@@ -6992,7 +7005,7 @@ STRATEGY_CONFIGS = {
         leverage=12,
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,        # ML should be very confident
+        min_signal_strength = 0.75,        # ML should be very confident
         ml_filter=True,
         regime_adaptive=True,
         performance_feedback=True,
@@ -7013,7 +7026,7 @@ STRATEGY_CONFIGS = {
         leverage=20,                     # Maximum leverage for micro-moves
         scan_symbols=["BTCUSDT", "ETHUSDT"],  # Most liquid pairs only
         timeframe="1",                  # Sub-minute execution
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         microstructure_boost=True,
         latency_critical=True,
         execution_alpha=True,
@@ -7033,7 +7046,7 @@ STRATEGY_CONFIGS = {
         leverage=3,                           # Conservative arbitrage leverage
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="1",
-        min_signal_strength = 0.85,             # Near-certain arbitrage only
+        min_signal_strength = 0.75,             # Near-certain arbitrage only
         latency_critical=True,
         execution_alpha=True,
         smart_routing=True,
@@ -7053,7 +7066,7 @@ STRATEGY_CONFIGS = {
         leverage=5,                      # ↓ Lower leverage for volatility
         scan_symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
         timeframe="15",
-        min_signal_strength = 0.85,
+        min_signal_strength = 0.75,
         regime_adaptive=True,
         volatility_scaling=True
     ),
@@ -7068,7 +7081,7 @@ STRATEGY_CONFIGS = {
         leverage=7,
         scan_symbols=["BTCUSDT", "ETHUSDT"],
         timeframe="5",
-        min_signal_strength = 0.85,        # ← High threshold for hybrid
+        min_signal_strength = 0.75,        # ← High threshold for hybrid
         regime_adaptive=True,
         ml_filter=True,
         cross_asset_correlation=True
@@ -7263,7 +7276,7 @@ class AccountManagerConfig:
     def __init__(self):
         # Risk Management Settings
         self.RISK_PER_TRADE = 0.015  # 2% risk per trade
-        self.MAX_POSITION_PCT = 0.15  # Max 15% of balance per position
+        self.MAX_POSITION_PCT = 0.30  # Max 15% of balance per position
         self.MAX_PORTFOLIO_RISK = 0.50  # Max 50% total portfolio exposure
         self.MIN_BALANCE_REQUIRED = 500  # Minimum account balance
         self.DAILY_LOSS_LIMIT_PCT = 0.10  # 10% daily loss limit
@@ -7296,8 +7309,8 @@ class AccountManagerConfig:
         if self.MAX_PORTFOLIO_RISK > 1.0:  # Max 100% portfolio risk
             logger.error("❌ Portfolio risk too high! Max 100% allowed")
             return False
-        if self.MAX_POSITION_PCT > 0.25:  # Max 25% per position
-            logger.error("❌ Position size too high! Max 25% allowed")
+        if self.MAX_POSITION_PCT > 0.35:  # Max 25% per position
+            logger.error("❌ Position size too high! Max 35% allowed")
             return False
         if self.MIN_BALANCE_REQUIRED < 100:
             logger.error("❌ Minimum balance too low! Min $100 required")
@@ -7463,9 +7476,9 @@ class EnhancedAccountManager(AccountManager):
         self.position_sizing_method = getattr(config, "position_sizing_method", "risk_based")
         
         # HFQ specific attributes
-        self.min_quality_score = getattr(config, "min_quality_score", 0.80)
-        self.excellent_quality = getattr(config, "excellent_quality", 0.90)
-        self.elite_quality = getattr(config, "elite_quality", 0.97)
+        self.min_quality_score = getattr(config, "min_quality_score", 0.75)
+        self.excellent_quality = getattr(config, "excellent_quality", 0.80)
+        self.elite_quality = getattr(config, "elite_quality", 0.85)
         
         # Add any other missing attributes with defaults
         for attr, default in [
@@ -8782,56 +8795,8 @@ class EnhancedMultiStrategyTradingBot:
         
 
     def should_trade_now(self, signal_strength: float = 0.0) -> bool:
-        """
-        Dynamic time-based trading filter
-        Adjusts signal requirements based on market hours
-        """
-        try:
-            current_hour = datetime.now(timezone.utc).hour
-            
-            # Define market sessions and quality requirements
-            # Prime hours: EU/US overlap (best liquidity)
-            prime_hours = [13, 14, 15, 16]  # 13:00-17:00 UTC
-            
-            # Good hours: Active sessions
-            good_hours = list(range(7, 21))  # 07:00-21:00 UTC
-            
-            # Moderate hours: Asian session
-            moderate_hours = [23, 0, 1, 2, 3, 4, 5, 6]
-            
-            # Adjust requirements based on time
-            if current_hour in prime_hours:
-                # Best hours - accept good signals
-                min_strength = 0.75
-                time_quality = "PRIME"
-            elif current_hour in good_hours:
-                # Good hours - standard requirements
-                min_strength = 0.75
-                time_quality = "GOOD"
-            elif current_hour in moderate_hours:
-                # Moderate hours - higher requirements
-                min_strength = 0.80
-                time_quality = "MODERATE"
-            else:
-                # Off hours - only exceptional signals
-                min_strength = 0.80
-                time_quality = "OFF-PEAK"
-            
-            # Log time-based decision
-            if signal_strength > 0:
-                logger.info(f"🕐 Market Hours: {time_quality} (UTC {current_hour}:00) | "
-                          f"Signal: {signal_strength:.2f} | Required: {min_strength:.2f}")
-            
-            # Allow high-quality signals to override time restrictions
-            if signal_strength >= 0.90:
-                logger.info("💎 Exceptional signal overrides time restriction!")
-                return True
-            
-            return signal_strength >= min_strength
-            
-        except Exception as e:
-            logger.error(f"Time filter error: {e}")
-            return True  # Default to allowing trades if error
+        """Trade 24/7 for crypto - no time restrictions"""
+        return True
         
     def check_emergency_conditions(self) -> bool:
         """Check for emergency stop conditions"""
@@ -8944,6 +8909,7 @@ class EnhancedMultiStrategyTradingBot:
                 return
             
             logger.info(f"🔍 Multi-Strategy Scan: {len(available_symbols)} symbols across {len(self.strategies)} strategies...")
+            logger.info("[DEBUG] Starting scan loop")
             
             # Collect all signals across all strategies and symbols
             all_signals = []
@@ -8976,7 +8942,8 @@ class EnhancedMultiStrategyTradingBot:
                     continue
             
             if not all_signals:
-                logger.info("🔍 No qualifying signals found across all strategies")
+                logger.info(f"[DEBUG] all_signals list has {len(all_signals)} items")
+            logger.info("🔍 No qualifying signals found across all strategies")
                 return
             
             # Sort by signal strength and execute best ones
@@ -9417,12 +9384,15 @@ class EnhancedMultiStrategyTradingBot:
         self.peak_balance = initial_balance['total']
         logger.info(f"✅ Starting balance: ${initial_balance['available']:,.2f}")
         
+        # Calculate dynamic position limits based on balance
+        # config.calculate_dynamic_limits(initial_balance['available'])
+            
         # Main multi-strategy trading loop
         scan_count = 0
         consecutive_errors = 0
         last_heartbeat_check = datetime.now()
-        last_summary_time = datetime.now()
-        
+        last_summary_time = datetime.now() 
+
         while True:
             try:
                 # Connection health check every 5 minutes
@@ -9468,7 +9438,7 @@ class EnhancedMultiStrategyTradingBot:
                 # Adaptive sleep based on market activity and total positions
                 positions = self.account_manager.get_open_positions()
                 if positions:
-                    sleep_time = 45
+                    sleep_time = 30
                 else:
                     sleep_time = 15
                 
