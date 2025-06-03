@@ -1,0 +1,5 @@
+timestamp,symbol,side,qty,price,action,position_value,pnl,strategy,signal_strength,rsi,session_id
+2025-05-27 19:54:11,ADAUSDT,Buy,1157.0,0.7631,OPEN,882.9067,0,RSI Quantum Pro,0.85,0,20250527
+2025-05-27 19:54:14,BTCUSDT,Buy,0.008,109796.7,OPEN,878.3736,0,RSI Quantum Pro,0.85,0,20250527
+2025-05-27 19:54:17,SOLUSDT,Buy,4.9,177.92,OPEN,871.808,0,RSI Quantum Pro,0.85,0,20250527
+2025-05-27 19:54:46,ETHUSDT,Buy,0.3,2687.19,OPEN,806.157,0,RSI Quantum Pro,0.85,0,20250527

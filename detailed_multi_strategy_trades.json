@@ -1,0 +1,58 @@
+[
+  {
+    "timestamp": "2025-05-27 19:54:11",
+    "symbol": "ADAUSDT",
+    "side": "Buy",
+    "qty": 1157.0,
+    "price": 0.7631,
+    "action": "OPEN",
+    "position_value": 882.9067,
+    "pnl": 0,
+    "strategy": "RSI Quantum Pro",
+    "signal_strength": 0.85,
+    "rsi": 0,
+    "session_id": "20250527"
+  },
+  {
+    "timestamp": "2025-05-27 19:54:14",
+    "symbol": "BTCUSDT",
+    "side": "Buy",
+    "qty": 0.008,
+    "price": 109796.7,
+    "action": "OPEN",
+    "position_value": 878.3736,
+    "pnl": 0,
+    "strategy": "RSI Quantum Pro",
+    "signal_strength": 0.85,
+    "rsi": 0,
+    "session_id": "20250527"
+  },
+  {
+    "timestamp": "2025-05-27 19:54:17",
+    "symbol": "SOLUSDT",
+    "side": "Buy",
+    "qty": 4.9,
+    "price": 177.92,
+    "action": "OPEN",
+    "position_value": 871.808,
+    "pnl": 0,
+    "strategy": "RSI Quantum Pro",
+    "signal_strength": 0.85,
+    "rsi": 0,
+    "session_id": "20250527"
+  },
+  {
+    "timestamp": "2025-05-27 19:54:46",
+    "symbol": "ETHUSDT",
+    "side": "Buy",
+    "qty": 0.3,
+    "price": 2687.19,
+    "action": "OPEN",
+    "position_value": 806.157,
+    "pnl": 0,
+    "strategy": "RSI Quantum Pro",
+    "signal_strength": 0.85,
+    "rsi": 0,
+    "session_id": "20250527"
+  }
+]
